@@ -1,0 +1,15 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^node --version ; npm --version$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "npx create-next-app@14": true,
+        "npm audit": true,
+        "/^npm audit --json 2>&1 \\| node -e \"const d=require\\('fs'\\)\\.readFileSync\\('/dev/stdin','utf8'\\); try\\{const j=JSON\\.parse\\(d\\); Object\\.entries\\(j\\.vulnerabilities\\|\\|\\{\\}\\)\\.filter\\(\\(\\[k,v\\]\\)=>v\\.severity==='high'\\|\\|v\\.severity==='critical'\\)\\.forEach\\(\\(\\[k,v\\]\\)=>console\\.log\\(v\\.severity, k, v\\.fixAvailable\\)\\)\\}catch\\(e\\)\\{console\\.log\\('parse error'\\)\\}\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "npx tsc": true
+    }
+}

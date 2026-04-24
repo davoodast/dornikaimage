@@ -10,8 +10,8 @@
 | فاز | عنوان | وضعیت | تاریخ |
 |---|---|---|---|
 | 0 | Setup — PROJECT_RULES.md + PHASES.md | ✅ تکمیل | 1404/02/05 |
-| 1 | Scaffolding + Next.js Setup | ⏳ در انتظار | — |
-| 2 | Security Middleware (OWASP) | ⏳ در انتظار | — |
+| 1 | Scaffolding + Next.js Setup | ✅ تکمیل | 1404/02/05 |
+| 2 | Security Middleware (OWASP) | ✅ تکمیل | 1404/02/05 |
 | 3 | Sharp Compression Engine | ⏳ در انتظار | — |
 | 4 | API Routes | ⏳ در انتظار | — |
 | 5 | Landing Page UI | ⏳ در انتظار | — |

@@ -1,0 +1,31 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# env files — never commit
+.env
+.env.local
+.env*.local
+
+# project-specific temp dirs
+/uploads/
+/compressed/
+/data/
+
+# PWA generated files
+/public/sw.js
+/public/workbox-*.js
+
+# local font (copied from npm, not tracked)
+/public/fonts/
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
