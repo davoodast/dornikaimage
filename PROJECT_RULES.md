@@ -178,6 +178,7 @@ Permissions-Policy: camera=(), microphone=(), geolocation=()
 - **Env vars** در startup چک شوند، اگر نبودند process.exit(1)
 - **Imports** همیشه از `@/` alias استفاده شود (tsconfig paths)
 - **No CDN** هیچ URL خارجی در هیچ فایلی — fonts, icons, scripts همه local
+- **فونت Vazirmatn** فونت اصلی برای متن فارسی: فایل‌های woff2 در `public/fonts/vazirmatn-*.woff2` — هرگز از CDN استفاده نشود؛ `font-family` در globals.css باید `'Vazirmatn'` اول باشد
 
 ---
 

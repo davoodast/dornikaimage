@@ -22,8 +22,8 @@
 /public/sw.js
 /public/workbox-*.js
 
-# local font (copied from npm, not tracked)
-/public/fonts/
+# local font — track in repo (no CDN allowed)
+# /public/fonts/ — DO NOT ignore; fonts are local-only assets
 
 # misc
 .DS_Store
