@@ -1,0 +1,265 @@
+# PROJECT_RULES.md — DornikaImage
+> **این فایل را در ابتدای هر پرامپت به agent attach کنید.**
+> Agent موظف است در پایان هر فاز، بخش Changelog را آپدیت کند.
+
+---
+
+## 1. Project Overview
+
+**DornikaImage** یک ابزار فشرده‌ساز تصویر تحت وب است با قابلیت‌های:
+- آپلود چندتایی با drag-and-drop
+- فشرده‌سازی بدون افت کیفیت (lossless / visually lossless)
+- نمایش real-time progress با SSE
+- دانلود تکی و دسته‌جمعی (ZIP)
+- پنل ادمین با لاگ و تنظیمات
+- PWA (قابل نصب روی موبایل و دسکتاپ)
+- پاکسازی خودکار فایل‌ها (configurable)
+- همه منابع **لوکال** — بدون نیاز به اینترنت در runtime
+
+---
+
+## 2. Stack (Exact Versions)
+
+| Package | Version | Purpose |
+|---|---|---|
+| next | ^14.2.x | Framework (App Router, API Routes) |
+| typescript | ^5.x | Type safety |
+| tailwindcss | ^3.4.x | Styling (no runtime, build-time only) |
+| sharp | ^0.33.x | Image compression (libvips) |
+| better-sqlite3 | ^9.x | Local SQLite logging DB |
+| winston | ^3.x | Logging (file + console) |
+| next-pwa | ^5.x | PWA / Service Worker |
+| jose | ^5.x | JWT auth (Edge Runtime compatible) |
+| zod | ^3.x | Input validation / schema |
+| react-dropzone | ^14.x | Drag & drop upload |
+| framer-motion | ^11.x | UI animations |
+| node-cron | ^3.x | Cleanup scheduler |
+| bcryptjs | ^2.x | Admin password hashing |
+| archiver | ^7.x | ZIP generation for batch download |
+| @types/* | matching | TypeScript types |
+
+**Node.js:** 20 LTS (minimum)
+**Package Manager:** npm (lock file committed)
+
+---
+
+## 3. Folder Structure
+
+```
+dornikaimage/
+├── src/
+│   ├── app/
+│   │   ├── page.tsx                    # Landing page (main UI)
+│   │   ├── layout.tsx                  # Root layout with meta/PWA tags
+│   │   ├── globals.css                 # Global styles + Tailwind directives
+│   │   ├── offline/page.tsx            # PWA offline fallback
+│   │   ├── admin/
+│   │   │   ├── login/page.tsx          # Admin login form
+│   │   │   └── dashboard/page.tsx      # Admin dashboard (server component)
+│   │   └── api/
+│   │       ├── upload/route.ts         # POST: receive + enqueue files
+│   │       ├── progress/route.ts       # GET SSE: stream job status
+│   │       ├── download/route.ts       # GET: serve single compressed file
+│   │       ├── download/batch/route.ts # GET: serve ZIP of all session files
+│   │       └── admin/
+│   │           ├── login/route.ts      # POST: verify credentials, set cookie
+│   │           ├── logs/route.ts       # GET: paginated logs from SQLite
+│   │           └── settings/route.ts   # GET+PATCH: admin settings
+│   ├── components/
+│   │   ├── upload/
+│   │   │   ├── DropZone.tsx            # Drag-and-drop area
+│   │   │   ├── ImageGrid.tsx           # Uploaded images preview grid
+│   │   │   └── ProgressCard.tsx        # Per-file status card
+│   │   ├── admin/
+│   │   │   ├── LogsTable.tsx           # Paginated logs viewer + CSV export
+│   │   │   └── SettingsForm.tsx        # Settings form with logo upload
+│   │   └── pwa/
+│   │       └── InstallBanner.tsx       # "Add to Home Screen" prompt
+│   ├── lib/
+│   │   ├── compression/
+│   │   │   ├── worker.ts               # Worker Thread: Sharp processing
+│   │   │   └── queue.ts                # Worker Thread Pool + job queue
+│   │   ├── db/
+│   │   │   └── client.ts               # better-sqlite3 singleton + typed queries
+│   │   ├── auth/
+│   │   │   └── jwt.ts                  # signToken / verifyToken via jose
+│   │   ├── security/
+│   │   │   ├── rateLimit.ts            # Sliding window in-memory rate limiter
+│   │   │   ├── validate.ts             # Zod schemas (upload, login, settings)
+│   │   │   └── fileValidator.ts        # Magic bytes validation + filename sanitize
+│   │   ├── logger/
+│   │   │   └── winston.ts              # Winston logger config
+│   │   ├── cleanup/
+│   │   │   └── scheduler.ts            # node-cron cleanup job
+│   │   └── hooks/
+│   │       └── useProgress.ts          # React hook: SSE client for progress
+│   └── types/
+│       └── index.ts                    # Shared TypeScript interfaces
+├── public/
+│   ├── fonts/                          # Inter font files (local, no CDN)
+│   ├── icons/                          # PWA icons (192x192, 512x512, maskable)
+│   ├── logo.png                        # App logo (replaceable via admin panel)
+│   └── manifest.webmanifest            # PWA manifest
+├── scripts/
+│   └── generate-password-hash.js       # CLI: bcrypt hash generator for admin pw
+├── uploads/                            # Temp uploaded files (gitignored)
+├── compressed/                         # Temp compressed output (gitignored)
+├── data/
+│   ├── logs.db                         # SQLite database (gitignored)
+│   └── app.log                         # Winston log file (gitignored)
+├── PROJECT_RULES.md                    # ← این فایل (attach در هر پرامپت)
+├── PHASES.md                           # فازهای پروژه + وضعیت هر فاز
+├── .env.local.example                  # Template env vars (no real values)
+├── .gitignore
+├── next.config.ts
+├── tailwind.config.ts
+├── tsconfig.json
+└── package.json
+```
+
+---
+
+## 4. Environment Variables
+
+همه متغیرها در `.env.local` (هرگز commit نشود):
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `ADMIN_USERNAME` | string | — | نام کاربری ادمین |
+| `ADMIN_PASSWORD_HASH` | string | — | bcrypt hash رمز ادمین |
+| `JWT_SECRET` | string (≥32 char) | — | کلید امضای JWT |
+| `CLEANUP_INTERVAL_MS` | number | 60000 | زمان پاکسازی فایل‌ها (ms) |
+| `MAX_FILE_SIZE_MB` | number | 20 | حداکثر سایز هر فایل |
+| `MAX_FILES_PER_UPLOAD` | number | 50 | حداکثر تعداد فایل در هر بار |
+| `RATE_LIMIT_REQUESTS` | number | 100 | تعداد درخواست مجاز |
+| `RATE_LIMIT_WINDOW_MS` | number | 60000 | بازه زمانی rate limit (ms) |
+| `NODE_ENV` | string | production | محیط اجرا |
+
+---
+
+## 5. Security Standards (OWASP Top 10)
+
+### چک‌لیست پیاده‌سازی
+
+| # | مورد | وضعیت | توضیح |
+|---|---|---|---|
+| A01 | Access Control | ⏳ | Admin JWT، دسترسی فایل scope‌بندی شده به session |
+| A02 | Cryptographic | ⏳ | JWT_SECRET ≥32 کاراکتر enforce شده، IP هش SHA-256 |
+| A03 | Injection | ⏳ | همه queries پارامتریک (better-sqlite3 prepared statements) |
+| A04 | Insecure Design | ⏳ | محدودیت سایز و تعداد فایل، endpoint های بسته |
+| A05 | Misconfiguration | ⏳ | Security headers در middleware، بدون debug route |
+| A06 | Vulnerable Components | ⏳ | npm audit در phase آخر |
+| A07 | Auth Failures | ⏳ | Rate limit login، خطای generic، httpOnly cookie |
+| A08 | Software Integrity | ⏳ | Magic bytes validation برای هر فایل آپلودی |
+| A09 | Logging Failures | ⏳ | رویدادهای امنیتی لاگ، بدون داده حساس در لاگ |
+| A10 | SSRF | ⏳ | هیچ fetch به URL کاربر انجام نمی‌شود |
+
+### Security Headers (باید در middleware باشند)
+```
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+X-Frame-Options: DENY
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin
+Content-Security-Policy: default-src 'self'; img-src 'self' blob: data:; ...
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+```
+
+---
+
+## 6. Coding Conventions
+
+- **TypeScript strict mode** روشن — هیچ `any` بدون توضیح
+- **API responses** همیشه با `NextResponse.json()` و status code صریح
+- **Error handling** در production: هرگز stack trace نمایش داده نشود
+- **Filenames** فایل‌های component: PascalCase، utilities: camelCase
+- **Async** همیشه async/await، هرگز callback nested
+- **Paths** همیشه `path.resolve()` و verify که داخل allowed directory است
+- **Env vars** در startup چک شوند، اگر نبودند process.exit(1)
+- **Imports** همیشه از `@/` alias استفاده شود (tsconfig paths)
+- **No CDN** هیچ URL خارجی در هیچ فایلی — fonts, icons, scripts همه local
+
+---
+
+## 7. Architecture Notes
+
+### Compression Pipeline
+```
+User Upload → File Validation (magic bytes) → Save to uploads/{sessionId}/
+    → Enqueue in WorkerPool → Worker Thread (Sharp) → Save to compressed/{sessionId}/
+    → SSE Event → Client shows progress → Download available
+```
+
+### Real-time Progress (SSE)
+- Client → GET /api/progress?sessionId=X
+- Server → EventSource stream تا همه job‌ها complete شوند
+- Timeout: 30 ثانیه (سپس connection بسته می‌شود)
+
+### Cleanup Scheduler
+- هر 30 ثانیه اجرا می‌شود
+- فایل‌های قدیمی‌تر از `CLEANUP_INTERVAL_MS` حذف می‌شوند
+- در SQLite `settings` table قابل تغییر از admin panel
+
+### Worker Thread Pool
+- Pool size = `os.cpus().length`
+- FIFO queue برای job‌ها
+- Global singleton در process (امن برای single-server)
+
+---
+
+## 8. Concurrency & Capacity
+
+| منبع | مشخصات |
+|---|---|
+| Worker Pool | تعداد CPU core |
+| Throughput | ~8–20 تصویر/ثانیه (4 core) |
+| کاربران همزمان | 100–300 (4 core / 8GB RAM) |
+| محدودیت اصلی | RAM (temp files per session) |
+
+---
+
+## 9. Deployment (Single Server, No Docker)
+
+```bash
+# روی سرور با اینترنت (یک‌بار):
+npm install
+npm run build
+
+# سپس کپی به سرور بدون اینترنت و:
+npm start   # runs on port 3000
+```
+
+**پیش‌نیازها:** Node.js 20 LTS — هیچ سرویس دیگری لازم نیست.
+
+---
+
+## 10. Changelog
+
+> Agent باید این بخش را در پایان هر فاز آپدیت کند.
+
+| فاز | عنوان | وضعیت | تاریخ |
+|---|---|---|---|
+| 0 | PROJECT_RULES.md + PHASES.md | ✅ تکمیل | 1404/02/05 |
+| 1 | Scaffolding + Next.js Setup | ⏳ در انتظار | — |
+| 2 | Security Middleware (OWASP) | ⏳ در انتظار | — |
+| 3 | Sharp Compression Engine | ⏳ در انتظار | — |
+| 4 | API Routes | ⏳ در انتظار | — |
+| 5 | Landing Page UI | ⏳ در انتظار | — |
+| 6 | Logging (Winston + SQLite) | ⏳ در انتظار | — |
+| 7 | Admin Panel | ⏳ در انتظار | — |
+| 8 | PWA Setup | ⏳ در انتظار | — |
+| 9 | Final Audit + README | ⏳ در انتظار | — |
+
+---
+
+## 11. Key Constraints Reminder (برای هر فاز)
+
+> ⚠️ Agent قبل از نوشتن هر خط کد این موارد را بررسی کند:
+
+1. **امنیت:** OWASP checklist بالا را مرور کن
+2. **لوکال بودن:** هیچ URL خارجی نباشد (CDN, fonts, icons, scripts)
+3. **Type safety:** هیچ `any` بدون توضیح کافی
+4. **Path traversal:** همه مسیر فایل‌ها با `path.resolve` و prefix check
+5. **Env vars:** از `process.env` با fallback safe استفاده کن
+6. **Error responses:** در production هرگز stack trace یا جزئیات داخلی
+7. **Rate limiting:** برای همه `/api/*` routes اعمال شده باشد
+8. **این فایل را در پایان آپدیت کن** — بخش Changelog و هر بخشی که تغییر کرده
