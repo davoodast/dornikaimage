@@ -1,6 +1,7 @@
 # PROJECT_RULES.md — DornikaImage
 > **این فایل را در ابتدای هر پرامپت به agent attach کنید.**
-> Agent موظف است در پایان هر فاز، بخش Changelog را آپدیت کند.
+> این فایل فقط شامل ساختار، قوانین، امنیت و استانداردهای پروژه است و تغییر نمی‌کند.
+> برای وضعیت فازها و پیشرفت پروژه، فایل `PHASES.md` را ببینید.
 
 ---
 
@@ -232,26 +233,7 @@ npm start   # runs on port 3000
 
 ---
 
-## 10. Changelog
-
-> Agent باید این بخش را در پایان هر فاز آپدیت کند.
-
-| فاز | عنوان | وضعیت | تاریخ |
-|---|---|---|---|
-| 0 | PROJECT_RULES.md + PHASES.md | ✅ تکمیل | 1404/02/05 |
-| 1 | Scaffolding + Next.js Setup | ⏳ در انتظار | — |
-| 2 | Security Middleware (OWASP) | ⏳ در انتظار | — |
-| 3 | Sharp Compression Engine | ⏳ در انتظار | — |
-| 4 | API Routes | ⏳ در انتظار | — |
-| 5 | Landing Page UI | ⏳ در انتظار | — |
-| 6 | Logging (Winston + SQLite) | ⏳ در انتظار | — |
-| 7 | Admin Panel | ⏳ در انتظار | — |
-| 8 | PWA Setup | ⏳ در انتظار | — |
-| 9 | Final Audit + README | ⏳ در انتظار | — |
-
----
-
-## 11. Key Constraints Reminder (برای هر فاز)
+## 10. Key Constraints Reminder (برای هر فاز)
 
 > ⚠️ Agent قبل از نوشتن هر خط کد این موارد را بررسی کند:
 
@@ -262,4 +244,4 @@ npm start   # runs on port 3000
 5. **Env vars:** از `process.env` با fallback safe استفاده کن
 6. **Error responses:** در production هرگز stack trace یا جزئیات داخلی
 7. **Rate limiting:** برای همه `/api/*` routes اعمال شده باشد
-8. **این فایل را در پایان آپدیت کن** — بخش Changelog و هر بخشی که تغییر کرده
+8. **PHASES.md را در پایان آپدیت کن** — وضعیت فاز و تاریخ تکمیل

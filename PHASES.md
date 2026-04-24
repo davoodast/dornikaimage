@@ -1,33 +1,34 @@
 # PHASES.md — DornikaImage
-> نقشه راه پروژه — تمام فازهای اجرایی
-> پس از تأیید هر فاز، وضعیت آن توسط agent به‌روز می‌شود.
+> **نقشه راه پروژه و tracker پیشرفت فازها**
+> این فایل توسط agent در پایان هر فاز آپدیت می‌شود.
+> `PROJECT_RULES.md` را همراه این فایل attach کنید.
 
 ---
 
 ## وضعیت کلی
 
-| فاز | عنوان | وضعیت |
-|---|---|---|
-| 0 | PROJECT_RULES.md + PHASES.md | ✅ تکمیل |
-| 1 | Scaffolding + Next.js Setup | ⏳ در انتظار |
-| 2 | Security Middleware (OWASP) | ⏳ در انتظار |
-| 3 | Sharp Compression Engine | ⏳ در انتظار |
-| 4 | API Routes | ⏳ در انتظار |
-| 5 | Landing Page UI | ⏳ در انتظار |
-| 6 | Logging (Winston + SQLite) | ⏳ در انتظار |
-| 7 | Admin Panel | ⏳ در انتظار |
-| 8 | PWA Setup | ⏳ در انتظار |
-| 9 | Final Audit + README | ⏳ در انتظار |
+| فاز | عنوان | وضعیت | تاریخ |
+|---|---|---|---|
+| 0 | Setup — PROJECT_RULES.md + PHASES.md | ✅ تکمیل | 1404/02/05 |
+| 1 | Scaffolding + Next.js Setup | ⏳ در انتظار | — |
+| 2 | Security Middleware (OWASP) | ⏳ در انتظار | — |
+| 3 | Sharp Compression Engine | ⏳ در انتظار | — |
+| 4 | API Routes | ⏳ در انتظار | — |
+| 5 | Landing Page UI | ⏳ در انتظار | — |
+| 6 | Logging (Winston + SQLite) | ⏳ در انتظار | — |
+| 7 | Admin Panel | ⏳ در انتظار | — |
+| 8 | PWA Setup | ⏳ در انتظار | — |
+| 9 | Final Audit + README | ⏳ در انتظار | — |
 
 ---
 
-## نحوه استفاده از این فایل
+## نحوه اجرای هر فاز
 
-1. پرامپت فاز مورد نظر را کپی کن
-2. فایل‌های `PROJECT_RULES.md` و `PHASES.md` را به chat attach کن
-3. پرامپت را به agent بفرست
-4. پس از اجرا و تأیید، agent هر دو فایل را آپدیت می‌کند
-5. commit و push بزن و به فاز بعد برو
+1. فایل‌های `PROJECT_RULES.md` و `PHASES.md` را به chat **attach** کن
+2. پرامپت فاز مورد نظر (بخش زیر) را **کپی و ارسال** کن
+3. پس از اجرا و **تأیید تو**، agent فقط `PHASES.md` را آپدیت می‌کند
+4. `git add . && git commit -m "Phase X: ..." && git push`
+5. به فاز بعد برو
 
 ---
 
