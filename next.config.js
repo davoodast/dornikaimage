@@ -3,7 +3,8 @@ const nextConfig = {
   output: 'standalone',
   poweredByHeader: false,
   experimental: {
-    serverComponentsExternalPackages: ['sharp', 'better-sqlite3'],
+    serverComponentsExternalPackages: ['sharp'],
+    instrumentationHook: true,
   },
   async headers() {
     return [

@@ -1,2 +1,88 @@
-// TODO: Phase 3 — Sharp Worker Thread
-// Receives job via workerData, compresses with Sharp, posts result back
+/**
+ * Sharp Worker Thread — runs inside a Worker Thread (not main thread).
+ * Receives one job via workerData, compresses the image, posts result back.
+ */
+import { workerData, parentPort } from 'worker_threads';
+import path from 'path';
+import sharp from 'sharp';
+import type { CompressionResult } from '@/types';
+
+interface WorkerInput {
+  jobId: string;
+  filename: string;
+  inputPath: string;
+  outputPath: string;
+  format: string;
+  /** Allowed base dirs for path validation */
+  uploadsDir: string;
+  compressedDir: string;
+}
+
+async function compress(): Promise<void> {
+  const { jobId, filename, inputPath, outputPath, format, uploadsDir, compressedDir } =
+    workerData as WorkerInput;
+
+  // Path containment — double-check inside the worker itself
+  const resolvedInput = path.resolve(inputPath);
+  const resolvedOutput = path.resolve(outputPath);
+  const resolvedUploads = path.resolve(uploadsDir);
+  const resolvedCompressed = path.resolve(compressedDir);
+
+  if (
+    !resolvedInput.startsWith(resolvedUploads + path.sep) ||
+    !resolvedOutput.startsWith(resolvedCompressed + path.sep)
+  ) {
+    parentPort?.postMessage({ jobId, error: 'Path traversal detected in worker' });
+    return;
+  }
+
+  try {
+    const originalSize = (await import('fs')).statSync(resolvedInput).size;
+    // Sharp strips all EXIF/XMP/IPTC metadata by default (no withMetadata call)
+    const pipeline = sharp(resolvedInput);
+
+    switch (format) {
+      case 'jpeg':
+      case 'jpg':
+        pipeline.jpeg({ quality: 85, progressive: true, mozjpeg: true });
+        break;
+      case 'png':
+        pipeline.png({ compressionLevel: 9, palette: false });
+        break;
+      case 'webp':
+        pipeline.webp({ lossless: true, effort: 6 });
+        break;
+      case 'avif':
+        pipeline.avif({ lossless: true, effort: 7 });
+        break;
+      case 'gif':
+        // GIF: passthrough — Sharp does not support animated GIF compression
+        break;
+      default:
+        parentPort?.postMessage({ jobId, error: `Unsupported format: ${format}` });
+        return;
+    }
+
+    await pipeline.toFile(resolvedOutput);
+    const compressedSize = (await import('fs')).statSync(resolvedOutput).size;
+    const savingsPercent = originalSize > 0
+      ? Math.round(((originalSize - compressedSize) / originalSize) * 100)
+      : 0;
+
+    const result: CompressionResult = {
+      jobId,
+      filename,
+      originalSize,
+      compressedSize,
+      savingsPercent,
+      outputPath: resolvedOutput,
+    };
+    parentPort?.postMessage(result);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    parentPort?.postMessage({ jobId, error: message });
+  }
+}
+
+compress();
+

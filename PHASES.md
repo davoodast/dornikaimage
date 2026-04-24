@@ -12,8 +12,8 @@
 | 0 | Setup — PROJECT_RULES.md + PHASES.md | ✅ تکمیل | 1404/02/05 |
 | 1 | Scaffolding + Next.js Setup | ✅ تکمیل | 1404/02/05 |
 | 2 | Security Middleware (OWASP) | ✅ تکمیل | 1404/02/05 |
-| 3 | Sharp Compression Engine | ⏳ در انتظار | — |
-| 4 | API Routes | ⏳ در انتظار | — |
+| 3 | Sharp Compression Engine | ✅ تکمیل | 1404/03/08 |
+| 4 | API Routes | ✅ تکمیل | 1404/03/08 |
 | 5 | Landing Page UI | ⏳ در انتظار | — |
 | 6 | Logging (Winston + SQLite) | ⏳ در انتظار | — |
 | 7 | Admin Panel | ⏳ در انتظار | — |
