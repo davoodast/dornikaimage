@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Winston Logger (Phase 6)
  * - Console transport: development only
  * - File transport: data/app.log (JSON, max 10MB × 5 files)

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Next.js Instrumentation hook — runs once per server process startup.
  * Used to initialize background services like the cleanup scheduler.
  * https://nextjs.org/docs/app/building-your-application/optimizing/instrumentation

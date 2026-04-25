@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { useCallback, useRef, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';

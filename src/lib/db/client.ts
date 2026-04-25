@@ -1,4 +1,4 @@
-﻿/**
+/**
  * SQLite Database Client (Phase 6)
  * Uses Node.js built-in `node:sqlite` (available since Node v22.5).
  * Module-level singleton — one connection per process.

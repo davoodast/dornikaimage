@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Cleanup Scheduler (Phase 4)
  * Runs every 30 seconds via node-cron.
  * Deletes session directories older than CLEANUP_INTERVAL_MS.

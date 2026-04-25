@@ -1,4 +1,4 @@
-﻿/**
+/**
  * GET /api/progress?sessionId=UUID
  * Server-Sent Events stream for real-time compression progress.
  * Closes after all jobs complete or 30s timeout.

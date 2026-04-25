@@ -1,4 +1,4 @@
-﻿/**
+/**
  * GET /api/download/batch?sessionId=UUID
  * Stream a ZIP archive of all compressed files for a session.
  * Uses archiver for streaming ZIP creation.

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { motion, AnimatePresence } from 'framer-motion';
 import ProgressCard from './ProgressCard';
 import type { ProgressJob } from '@/lib/hooks/useProgress';

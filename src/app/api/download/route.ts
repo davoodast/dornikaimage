@@ -1,4 +1,4 @@
-﻿/**
+/**
  * GET /api/download?sessionId=UUID&jobId=UUID
  * Serve a single compressed image file.
  * OWASP A01: path containment enforced before any file read.
