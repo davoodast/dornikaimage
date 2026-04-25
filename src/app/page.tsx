@@ -199,27 +199,6 @@ export default function Home() {
       </header>
 
       <div className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-10 flex flex-col">
-        {/* About Us slide-down panel */}
-        <AnimatePresence>
-          {showAbout && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.25 }}
-              className="overflow-hidden"
-            >
-              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 mb-4 space-y-2">
-                <h2 className="text-teal-400 font-bold text-sm">درباره ما</h2>
-                <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">
-                  {publicSettings.about_us_text}
-                </p>
-                <p className="text-slate-600 text-xs mt-2">{publicSettings.footer_text}</p>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         {/* Tool disabled state */}
         {!publicSettings.tool_enabled ? (
           <div className="flex flex-col items-center justify-center py-24 space-y-4">
@@ -272,6 +251,27 @@ export default function Home() {
                 )}
 
                 <DropZone files={pendingFiles} onFilesChange={setPendingFiles} maxFiles={50} maxSizeMB={20} />
+
+                {/* About Us slide-down panel — below dropzone */}
+                <AnimatePresence>
+                  {showAbout && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.25 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 space-y-2">
+                        <h2 className="text-teal-400 font-bold text-sm">{'درباره ما'}</h2>
+                        <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">
+                          {publicSettings.about_us_text}
+                        </p>
+                        <p className="text-slate-600 text-xs mt-2">{publicSettings.footer_text}</p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 <AnimatePresence>
                   {pendingFiles.length > 0 && (

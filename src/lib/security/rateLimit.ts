@@ -10,14 +10,20 @@ interface WindowEntry {
 
 export class SlidingWindowRateLimiter {
   private store = new Map<string, WindowEntry>();
-  private readonly maxRequests: number;
-  private readonly windowMs: number;
+  private maxRequests: number;
+  private windowMs: number;
 
   constructor(maxRequests: number, windowMs: number) {
     this.maxRequests = maxRequests;
     this.windowMs = windowMs;
     // Auto-cleanup stale entries every 60 seconds
     setInterval(() => this.cleanup(), 60_000).unref?.();
+  }
+
+  reconfigure(maxRequests: number, windowMs: number): void {
+    this.maxRequests = maxRequests;
+    this.windowMs = windowMs;
+    this.store.clear(); // reset all windows when config changes
   }
 
   check(key: string): { allowed: boolean; retryAfter?: number } {
@@ -55,3 +61,5 @@ const apiWindow = Number(process.env.RATE_LIMIT_WINDOW_MS) || 60_000;
 export const apiRateLimiter = new SlidingWindowRateLimiter(apiMax, apiWindow);
 export const adminRateLimiter = new SlidingWindowRateLimiter(20, 60_000);
 export const loginRateLimiter = new SlidingWindowRateLimiter(5, 15 * 60_000);
+// Configurable upload rate limiter — reconfigured when admin changes settings
+export const uploadRateLimiter = new SlidingWindowRateLimiter(apiMax, apiWindow);

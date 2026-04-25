@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { verifyToken, getTokenFromCookies } from '@/lib/auth/jwt';
 import { getAllSettings, upsertSetting } from '@/lib/db/client';
 import { settingsSchema } from '@/lib/security/validate';
+import { uploadRateLimiter } from '@/lib/security/rateLimit';
 
 async function authorize(request: NextRequest) {
   const token = getTokenFromCookies(request.headers.get('cookie'));
@@ -37,6 +38,8 @@ export async function PATCH(request: NextRequest) {
     'cleanup_interval_ms',
     'max_file_size_mb',
     'max_files_per_upload',
+    'rate_limit_requests',
+    'rate_limit_window_ms',
   ] as const;
 
   const stringKeys = [
@@ -47,6 +50,7 @@ export async function PATCH(request: NextRequest) {
     'app_formats_text',
     'footer_text',
     'tool_disabled_message',
+    'rate_limit_message',
   ] as const;
 
   for (const key of numericKeys) {
@@ -67,6 +71,14 @@ export async function PATCH(request: NextRequest) {
 
   if (parsed.data.log_enabled !== undefined) {
     upsertSetting('log_enabled', parsed.data.log_enabled ? '1' : '0');
+  }
+
+  // Reconfigure the in-process upload rate limiter when rate limit settings change
+  const newMax = parsed.data.rate_limit_requests;
+  const newWindow = parsed.data.rate_limit_window_ms;
+  if (newMax !== undefined || newWindow !== undefined) {
+    const updated = getAllSettings();
+    uploadRateLimiter.reconfigure(updated.rate_limit_requests, updated.rate_limit_window_ms);
   }
 
   return NextResponse.json(getAllSettings());

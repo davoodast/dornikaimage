@@ -10,6 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
 
 // ─── DashboardCharts.tsx ─────────────────────────────────────────────────────
+// Full rewrite with hourly tab + AreaChart for peak traffic analysis
 
 const dashboardCharts = `'use client';
 import { useState, useEffect, useCallback } from 'react';

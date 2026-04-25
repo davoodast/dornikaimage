@@ -6,6 +6,7 @@
 import { NextRequest } from 'next/server';
 import { uuidSchema } from '@/lib/security/validate';
 import { getCompressionQueue } from '@/lib/compression/queue';
+import { updateLogSavings, getSetting } from '@/lib/db/client';
 import type { JobProgress } from '@/types';
 
 const SSE_TIMEOUT_MS = 30_000;
@@ -46,6 +47,18 @@ export async function GET(req: NextRequest): Promise<Response> {
         send({ type: 'progress', progress });
         if (queue.isSessionComplete(parsed.data)) {
           send({ type: 'done' });
+          // Update log with actual compression savings
+          try {
+            if (getSetting('log_enabled') !== '0') {
+              const allJobs = queue.getSessionProgress(parsed.data);
+              const totalCompressed = allJobs.reduce((s, j) => s + (j.compressedSize ?? 0), 0);
+              const totalOriginal = allJobs.reduce((s, j) => s + (j.originalSize ?? 0), 0);
+              const pct = totalOriginal > 0
+                ? Math.round(((totalOriginal - totalCompressed) / totalOriginal) * 100)
+                : 0;
+              updateLogSavings(parsed.data, totalCompressed, pct);
+            }
+          } catch { /* log update failure must not break SSE */ }
           cleanup();
           controller.close();
         }

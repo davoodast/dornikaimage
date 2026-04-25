@@ -51,6 +51,9 @@ export default function SettingsForm() {
       if (form.max_file_size_mb != null) body.max_file_size_mb = Number(form.max_file_size_mb);
       if (form.max_files_per_upload != null) body.max_files_per_upload = Number(form.max_files_per_upload);
       if (form.output_format != null) body.output_format = form.output_format;
+      if (form.rate_limit_requests != null) body.rate_limit_requests = Number(form.rate_limit_requests);
+      if (form.rate_limit_window_ms != null) body.rate_limit_window_ms = Number(form.rate_limit_window_ms);
+      if (form.rate_limit_message != null) body.rate_limit_message = form.rate_limit_message;
       if (form.about_us_text != null) body.about_us_text = form.about_us_text;
       if (form.app_title != null) body.app_title = form.app_title;
       if (form.app_subtitle != null) body.app_subtitle = form.app_subtitle;
@@ -298,7 +301,51 @@ export default function SettingsForm() {
             </select>
           </div>
           <div>
-            <label className={labelCls}>لوگوی سایت</label>
+            <label className={labelCls}>{'حداکثر درخواست در بازه زمانی'}</label>
+            <input
+              type="number"
+              min={1}
+              max={10000}
+              value={form.rate_limit_requests ?? settings?.rate_limit_requests ?? 100}
+              onChange={(e) => setForm((f) => ({ ...f, rate_limit_requests: Number(e.target.value) }))}
+              className={inputCls}
+            />
+            <p className="text-xs text-slate-500 mt-1">{'تعداد آپلود مجاز برای هر کاربر در بازه زمانی'}</p>
+          </div>
+          <div>
+            <label className={labelCls}>
+              {'بازه زمانی'}
+              <span className="text-slate-500 mr-2">
+                {'('}{Math.round((form.rate_limit_window_ms ?? settings?.rate_limit_window_ms ?? 60000) / 1000)}{' ثانیه)'}
+              </span>
+            </label>
+            <input
+              type="range"
+              min={5000}
+              max={3600000}
+              step={5000}
+              value={form.rate_limit_window_ms ?? settings?.rate_limit_window_ms ?? 60000}
+              onChange={(e) => setForm((f) => ({ ...f, rate_limit_window_ms: Number(e.target.value) }))}
+              className="w-full accent-teal-500"
+            />
+            <div className="flex justify-between text-xs text-slate-600 mt-1">
+              <span>{'۵ ثانیه'}</span>
+              <span>{'۱ ساعت'}</span>
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>{'پیام محدودیت نرخ'}</label>
+            <input
+              type="text"
+              value={form.rate_limit_message ?? settings?.rate_limit_message ?? ''}
+              onChange={(e) => setForm((f) => ({ ...f, rate_limit_message: e.target.value }))}
+              className={inputCls}
+              maxLength={500}
+              placeholder="تعداد درخواست‌های شما بیش از حد مجاز است..."
+            />
+          </div>
+          <div>
+            <label className={labelCls}>{'لوگوی سایت'}</label>
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-xl bg-slate-800 border border-slate-700 overflow-hidden flex-shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}

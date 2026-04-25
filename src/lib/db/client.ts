@@ -77,6 +77,9 @@ function initDb(db: DatabaseSync): void {
     tool_enabled: '1',
     tool_disabled_message: 'این سرویس در حال حاضر در دسترس نیست. لطفاً بعداً مراجعه کنید.',
     log_enabled: '1',
+    rate_limit_requests: '100',
+    rate_limit_window_ms: '60000',
+    rate_limit_message: 'تعداد درخواست‌های شما بیش از حد مجاز است. لطفاً کمی صبر کنید.',
   };
   const insert = db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)`);
   for (const [key, value] of Object.entries(defaults)) {
@@ -224,6 +227,7 @@ export function getStats(): {
 }
 
 export interface ChartStats {
+  hourly: Array<{ hour: string; total: number; success: number; fail: number }>;
   daily: Array<{ date: string; total: number; success: number; fail: number }>;
   weekly: Array<{ week: string; total: number; success: number; fail: number }>;
   monthly: Array<{ month: string; total: number; success: number; fail: number }>;
@@ -237,6 +241,17 @@ export interface ChartStats {
 
 export function getChartStats(): ChartStats {
   const db = getDb();
+
+  const hourlyRows = db.prepare(`
+    SELECT strftime('%Y-%m-%d %H:00', timestamp) as hour,
+           COUNT(*) as total,
+           SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as success,
+           SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as fail
+    FROM logs
+    WHERE created_at >= ?
+    GROUP BY strftime('%Y-%m-%d %H:00', timestamp)
+    ORDER BY strftime('%Y-%m-%d %H:00', timestamp) ASC
+  `).all(Date.now() - 48 * 3600 * 1000) as Array<{ hour: string; total: number; success: number; fail: number }>;
 
   const dailyRows = db.prepare(`
     SELECT date(timestamp) as date,
@@ -297,6 +312,7 @@ export function getChartStats(): ChartStats {
   const activeRow2 = db.prepare('SELECT COUNT(DISTINCT session_id) as cnt FROM logs WHERE created_at >= ?').get(Date.now() - 3_600_000) as { cnt: number };
 
   return {
+    hourly: hourlyRows,
     daily: dailyRows,
     weekly: weeklyRows,
     monthly: monthlyRows,
@@ -312,6 +328,18 @@ export function getChartStats(): ChartStats {
 export function clearLogs(): void {
   const db = getDb();
   db.exec('DELETE FROM logs');
+}
+
+export function updateLogSavings(
+  sessionId: string,
+  totalCompressedBytes: number,
+  savingsPercent: number,
+): void {
+  const db = getDb();
+  db.prepare(`
+    UPDATE logs SET total_compressed_bytes = ?, savings_percent = ?
+    WHERE id = (SELECT id FROM logs WHERE session_id = ? ORDER BY created_at DESC LIMIT 1)
+  `).run(totalCompressedBytes, savingsPercent, sessionId);
 }
 
 // ─── Settings helpers ─────────────────────────────────────────
@@ -352,6 +380,9 @@ export function getAllSettings(): AdminSettings {
     tool_enabled: (map.tool_enabled ?? '1') === '1',
     tool_disabled_message: map.tool_disabled_message ?? 'این سرویس در حال حاضر در دسترس نیست. لطفاً بعداً مراجعه کنید.',
     log_enabled: (map.log_enabled ?? '1') === '1',
+    rate_limit_requests: Number(map.rate_limit_requests ?? 100),
+    rate_limit_window_ms: Number(map.rate_limit_window_ms ?? 60000),
+    rate_limit_message: map.rate_limit_message ?? 'تعداد درخواست‌های شما بیش از حد مجاز است. لطفاً کمی صبر کنید.',
   };
 }
 

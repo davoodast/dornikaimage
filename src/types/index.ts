@@ -10,6 +10,7 @@ export interface CompressionJob {
   format: string;
   status: JobStatus;
   compressionLevel?: CompressionLevel;
+  outputFormat?: 'webp' | 'jpeg' | 'both';
   originalSize?: number;
   compressedSize?: number;
   error?: string;
@@ -63,6 +64,9 @@ export interface AdminSettings {
   tool_enabled: boolean;
   tool_disabled_message: string;
   log_enabled: boolean;
+  rate_limit_requests: number;
+  rate_limit_window_ms: number;
+  rate_limit_message: string;
 }
 
 export interface JobProgress {

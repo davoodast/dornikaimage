@@ -61,6 +61,7 @@ class CompressionQueue extends EventEmitter {
           uploadsDir: UPLOADS_DIR,
           compressedDir: COMPRESSED_DIR,
           compressionLevel: job.compressionLevel ?? 'balanced',
+          outputFormat: job.outputFormat ?? 'webp',
         },
       });
     } catch (err) {

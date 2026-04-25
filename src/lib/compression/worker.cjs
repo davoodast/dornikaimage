@@ -17,6 +17,10 @@ const fs = require('fs');
 const WEBP_QUALITY = { balanced: 85, high_compression: 75, high_quality: 92 };
 /** WebP encoding effort per level (1 = fastest, 6 = slowest/best) */
 const WEBP_EFFORT  = { balanced: 4,  high_compression: 6,  high_quality: 3  };
+/** JPEG quality per level */
+const JPEG_QUALITY = { balanced: 85, high_compression: 75, high_quality: 92 };
+/** JPEG chroma subsampling (4:2:0 for compression, 4:4:4 for quality) */
+const JPEG_CHROMASUB = { balanced: '4:2:0', high_compression: '4:2:0', high_quality: '4:4:4' };
 
 async function compress() {
   const {
@@ -28,6 +32,7 @@ async function compress() {
     uploadsDir,
     compressedDir,
     compressionLevel,
+    outputFormat,
   } = workerData;
 
   const resolvedInput     = path.resolve(inputPath);
@@ -44,6 +49,8 @@ async function compress() {
   }
 
   const level = compressionLevel && WEBP_QUALITY[compressionLevel] ? compressionLevel : 'balanced';
+  // 'both' treated same as 'webp' (best compression)
+  const useJpeg = outputFormat === 'jpeg';
 
   try {
     const originalSize = fs.statSync(resolvedInput).size;
@@ -56,6 +63,24 @@ async function compress() {
       outputFilename = filename;
       outputFilePath = resolvedOutput;
       await sharp(resolvedInput, { animated: true }).gif().toFile(resolvedOutput);
+    } else if (useJpeg) {
+      // Convert to JPEG
+      const baseName = path.parse(filename).name;
+      outputFilename = baseName + '.jpg';
+      outputFilePath = resolvedOutput.replace(/\.[^/.]+$/, '.jpg');
+
+      if (!outputFilePath.startsWith(resolvedCompressed + path.sep)) {
+        parentPort.postMessage({ jobId, error: 'Path traversal detected after jpeg rename' });
+        return;
+      }
+
+      await sharp(resolvedInput)
+        .jpeg({
+          quality: JPEG_QUALITY[level],
+          chromaSubsampling: JPEG_CHROMASUB[level],
+          mozjpeg: true,
+        })
+        .toFile(outputFilePath);
     } else {
       // Convert to WebP for best compression ratio
       const baseName = path.parse(filename).name;

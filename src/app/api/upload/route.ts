@@ -6,6 +6,7 @@ import { validateFileSignature, sanitizeFilename, FORMAT_TO_EXT } from '@/lib/se
 import { ALLOWED_MIME_TYPES } from '@/lib/security/validate';
 import { getCompressionQueue } from '@/lib/compression/queue';
 import { insertLog, hashValue, getSetting } from '@/lib/db/client';
+import { uploadRateLimiter } from '@/lib/security/rateLimit';
 import { logUpload, logValidationFailure } from '@/lib/logger/winston';
 import type { CompressionJob, CompressionLevel } from '@/types';
 
@@ -35,6 +36,17 @@ function parseUserAgent(ua: string): { deviceType: 'mobile' | 'desktop'; browser
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  // Configurable per-IP rate limit (separate from middleware hard limit)
+  const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const rl = uploadRateLimiter.check(clientIp);
+  if (!rl.allowed) {
+    const msg = getSetting('rate_limit_message') ?? 'تعداد درخواست‌های شما بیش از حد مجاز است. لطفاً کمی صبر کنید.';
+    return NextResponse.json({ error: msg }, {
+      status: 429,
+      headers: { 'Retry-After': String(rl.retryAfter ?? 60) },
+    });
+  }
+
   const startTime = Date.now();
   let formData: FormData;
   try {
@@ -108,6 +120,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       format: detectedFormat,
       status: 'queued',
       compressionLevel,
+      outputFormat: (getSetting('output_format') ?? 'webp') as 'webp' | 'jpeg' | 'both',
     };
 
     queue.enqueue(job).catch(() => { /* errors tracked in sessionProgress */ });
@@ -117,7 +130,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // Log the upload event (OWASP A09) — only if logging is enabled
   const logEnabled = getSetting('log_enabled') !== '0';
   if (logEnabled) {
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const ip = clientIp;
   const ua = req.headers.get('user-agent') ?? 'unknown';
   const { deviceType, browser, os } = parseUserAgent(ua);
   try {
