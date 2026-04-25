@@ -157,7 +157,7 @@ dornikaimage/
 | A03 | Injection | ✅ | همه queries پارامتریک (node:sqlite prepared statements) |
 | A04 | Insecure Design | ✅ | محدودیت سایز و تعداد فایل، endpoint های بسته |
 | A05 | Misconfiguration | ✅ | Security headers در middleware، بدون debug route |
-| A06 | Vulnerable Components | ⏳ | npm audit در phase 9 |
+| A06 | Vulnerable Components | ✅ | npm audit اجرا شد — آسیب‌پذیری‌ها در next-pwa/eslint devDeps هستند، runtime تأثیر ندارند |
 | A07 | Auth Failures | ✅ | Rate limit login (5/15min)، خطای generic، httpOnly cookie |
 | A08 | Software Integrity | ✅ | Magic bytes validation برای هر فایل آپلودی |
 | A09 | Logging | ✅ | رویدادهای امنیتی لاگ، IP هش شده، بدون داده حساس |
