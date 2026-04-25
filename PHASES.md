@@ -20,6 +20,9 @@
 | 7 | Admin Panel | ✅ تکمیل | 1404/02/06 |
 | 8 | PWA Setup | ✅ تکمیل | 1404/02/06 |
 | 9 | Final Audit + README | ✅ تکمیل | 1404/02/06 |
+| 10 | Extended Settings & Admin Content Management | ⏳ در انتظار | — |
+| 11 | Main Page UI Upgrades | ⏳ در انتظار | — |
+| 12 | Admin Analytics & Enhanced Logging | ⏳ در انتظار | — |
 
 ---
 
@@ -1120,6 +1123,539 @@ npm start
 ## DONE ← PROJECT COMPLETE
 Update PROJECT_RULES.md: all OWASP items ✅, status = PRODUCTION READY
 Update PHASES.md: all phases ✅
+```
+
+---
+
+## یادداشت‌های مهم
+
+### درباره فاز ۵ و ۶
+این دو فاز می‌توانند **موازی** در دو پرامپت جداگانه (یا دو نمونه agent) اجرا شوند:
+- فاز ۵ (UI) به کد فاز ۶ (Logging) وابسته نیست
+- فاز ۶ به فاز ۵ وابسته نیست
+
+### پس از هر فاز
+```
+1. کد را بررسی کن
+2. npm run build اجرا کن — باید بدون خطا پاس بشه
+3. تأیید کن
+4. git add . && git commit -m "Phase X: عنوان"
+5. git push
+6. به فاز بعد برو
+```
+
+---
+
+## فاز ۱۰ — Extended Settings & Admin Content Management
+
+**وضعیت:** ⏳ در انتظار  
+**پیش‌نیاز:** فازهای ۱–۹ تکمیل  
+**فایل‌های خروجی:**
+- `src/lib/db/client.ts` — default settings جدید
+- `src/types/index.ts` — فیلدهای جدید AdminSettings
+- `src/lib/security/validate.ts` — settingsSchema آپدیت
+- `src/app/api/admin/settings/route.ts` — allowedKeys آپدیت
+- `src/app/api/admin/change-password/route.ts` ← جدید
+- `src/app/api/public/settings/route.ts` ← جدید
+- `src/app/api/admin/login/route.ts` — hash از DB اول
+- `src/components/admin/SettingsForm.tsx` — تب‌بندی ۴ تایی
+- `src/app/admin/dashboard/page.tsx` — دکمه مشاهده سایت
+
+---
+
+### 📋 PROMPT فاز ۱۰
+
+```
+[ATTACH: PROJECT_RULES.md]
+[ATTACH: PHASES.md]
+
+Read PROJECT_RULES.md carefully before writing any code. All previous phases (1-9) are complete.
+
+## TASK: Phase 10 — Extended Settings & Admin Content Management
+
+### 1. DB Migration — src/lib/db/client.ts
+In initDb(), add INSERT OR IGNORE defaults for new settings keys AFTER the existing defaults block:
+  'output_format'           → 'both'
+  'about_us_text'           → 'درنیکا وب — ارائه‌دهنده ابزارهای هوشمند وب'
+  'app_title'               → 'دستبار تصویر درنیکا وب'
+  'app_subtitle'            → 'فشرده‌سازی هوشمند تصویر بدون افت کیفیت'
+  'app_formats_text'        → 'JPEG، PNG، WebP، AVIF و GIF — همه روی سرور و بدون نیاز به اینترنت'
+  'footer_text'             → 'تمام حقوق متعلق به درنیکا وب است — Dornika Web 2026'
+  'tool_enabled'            → '1'
+  'tool_disabled_message'   → 'این سرویس در حال حاضر در دسترس نیست. لطفاً بعداً مراجعه کنید.'
+
+Also update getAllSettings() to parse the new keys correctly:
+- `tool_enabled`: parse as boolean (stored value === '1')
+- `output_format`: return as-is string
+
+### 2. Types — src/types/index.ts
+Extend AdminSettings interface with new fields:
+  output_format: 'webp' | 'jpeg' | 'both';
+  about_us_text: string;
+  app_title: string;
+  app_subtitle: string;
+  app_formats_text: string;
+  footer_text: string;
+  tool_enabled: boolean;
+  tool_disabled_message: string;
+
+### 3. Zod Schema — src/lib/security/validate.ts
+Update settingsSchema to add new optional fields (all optional for PATCH):
+  output_format: z.enum(['webp', 'jpeg', 'both']).optional()
+  about_us_text: z.string().min(1).max(2000).optional()
+  app_title: z.string().min(1).max(100).optional()
+  app_subtitle: z.string().min(1).max(200).optional()
+  app_formats_text: z.string().min(1).max(200).optional()
+  footer_text: z.string().min(1).max(200).optional()
+  tool_enabled: z.boolean().optional()
+  tool_disabled_message: z.string().min(1).max(500).optional()
+
+### 4. Settings API — src/app/api/admin/settings/route.ts
+Update PATCH handler:
+- Add new string fields to allowedKeys and store them directly with upsertSetting
+- For `tool_enabled` (boolean): store as String(value ? '1' : '0')
+- For `output_format`: store as-is string
+
+### 5. Public Settings API — src/app/api/public/settings/route.ts (NEW FILE)
+Create a public (no auth) GET endpoint:
+- Import apiRateLimiter from @/lib/security/rateLimit and apply it
+- Call getAllSettings()
+- Return ONLY these fields: about_us_text, app_title, app_subtitle, app_formats_text, footer_text, tool_enabled, tool_disabled_message, cleanup_interval_ms
+- No auth required — these are public content fields only
+
+### 6. Change Password API — src/app/api/admin/change-password/route.ts (NEW FILE)
+POST endpoint (JWT-gated via verifyToken + getTokenFromCookies):
+- Body Zod schema: { current_password: z.string(), new_password: z.string().min(8), confirm_password: z.string() }
+- Validate confirm_password === new_password (return 400 if mismatch)
+- Get current hash: first check getAllSettings().admin_password_hash (if exists in DB), fallback to process.env.ADMIN_PASSWORD_HASH
+- bcrypt.compare(current_password, currentHash) — if fail: return 401 { error: 'رمز فعلی اشتباه است' }
+- bcrypt.hash(new_password, 12) → upsertSetting('admin_password_hash', newHash)
+- Return 200 { success: true }
+- Apply loginRateLimiter (import from @/lib/security/rateLimit)
+- OWASP A07: never reveal which field was wrong
+
+### 7. Admin Login Route — src/app/api/admin/login/route.ts
+Update password lookup:
+- First: get hash from getAllSettings() key 'admin_password_hash' (if set in DB)
+- Fallback: process.env.ADMIN_PASSWORD_HASH
+This allows password changes via admin panel to take effect without redeploying.
+
+### 8. SettingsForm.tsx — src/components/admin/SettingsForm.tsx
+Redesign into 4 tabs (local useState for active tab, no routing):
+Tab 1 "محتوا":
+  - app_title (text input)
+  - app_subtitle (text input)
+  - app_formats_text (text input)
+  - about_us_text (textarea, rows=5)
+  - footer_text (text input)
+Tab 2 "تنظیمات فنی":
+  - cleanup_interval_ms (number input, label: "زمان پاکسازی (میلی‌ثانیه)")
+  - max_file_size_mb (number input)
+  - max_files_per_upload (number input)
+  - output_format (select: value="webp" label="WebP" / value="jpeg" label="JPEG" / value="both" label="هر دو")
+  - Logo upload (existing logic, keep as-is)
+Tab 3 "وضعیت ابزار":
+  - tool_enabled toggle (styled checkbox/switch, label: "ابزار فعال است")
+  - tool_disabled_message (textarea, rows=3, shown always)
+Tab 4 "تغییر رمز":
+  - current_password (input type=password)
+  - new_password (input type=password)
+  - confirm_password (input type=password, client-side match validation)
+  - Submit calls POST /api/admin/change-password
+  - Uses same toast pattern for success/error
+Preserve existing toast, loading, saving patterns.
+Tab bar: teal underline for active tab, slate text for inactive.
+
+### 9. Admin Dashboard Header — src/app/admin/dashboard/page.tsx
+Add "مشاهده سایت" button in header next to LogoutButton:
+  <a href="/" target="_blank" rel="noopener noreferrer"
+     className="text-sm text-slate-400 hover:text-teal-400 transition-colors border border-slate-700 hover:border-teal-600 rounded-lg px-3 py-1.5">
+    مشاهده سایت
+  </a>
+
+### 10. Update PROJECT_RULES.md Section 3 (Folder Structure)
+Add new files to the tree under api/admin/ and api/public/:
+  src/app/api/admin/change-password/route.ts
+  src/app/api/public/settings/route.ts
+
+### 11. Update PHASES.md
+Mark Phase 10 as ✅ تکمیل with date 1404/02/05.
+
+## Verification checklist:
+- [ ] npm run build passes with 0 TypeScript errors
+- [ ] GET /api/public/settings returns correct fields without auth
+- [ ] PATCH /api/admin/settings saves new fields (test each tab)
+- [ ] POST /api/admin/change-password rejects wrong current password
+- [ ] After password change, login with new password works
+- [ ] SettingsForm shows 4 tabs, each saves independently
+```
+
+---
+
+## فاز ۱۱ — Main Page UI Upgrades
+
+**وضعیت:** ⏳ در انتظار  
+**پیش‌نیاز:** فاز ۱۰ تکمیل  
+**فایل‌های خروجی:**
+- `src/app/page.tsx` — حذف ادمین link، about us، انیمیشن، skeleton، timer، tool_disabled
+- `src/components/upload/CompressionAnimation.tsx` ← جدید
+- `src/components/upload/DownloadButton.tsx` ← جدید
+- `src/components/upload/ProgressCard.tsx` — دانلود با DownloadButton
+- `PROJECT_RULES.md` — ساختار آپدیت
+
+---
+
+### 📋 PROMPT فاز ۱۱
+
+```
+[ATTACH: PROJECT_RULES.md]
+[ATTACH: PHASES.md]
+
+Read PROJECT_RULES.md carefully before writing any code. Phase 10 is complete.
+
+## TASK: Phase 11 — Main Page UI Upgrades
+
+### 1. Public Settings Fetch — src/app/page.tsx
+Add at the top of the Home component:
+- State: publicSettings with type:
+  { app_title: string; app_subtitle: string; app_formats_text: string; about_us_text: string; footer_text: string; tool_enabled: boolean; tool_disabled_message: string; cleanup_interval_ms: number }
+- Fetch /api/public/settings on mount (useEffect), store in state
+- Default values while loading: { app_title: 'دستبار تصویر درنیکا وب', app_subtitle: 'فشرده‌سازی هوشمند تصویر بدون افت کیفیت', app_formats_text: 'JPEG، PNG، WebP، AVIF و GIF — همه روی سرور و بدون نیاز به اینترنت', about_us_text: '', footer_text: 'تمام حقوق متعلق به درنیکا وب است — Dornika Web 2026', tool_enabled: true, tool_disabled_message: '', cleanup_interval_ms: 3600000 }
+
+### 2. Skeleton Loading — src/app/page.tsx
+Add isMounted state (false → set true in useEffect on mount):
+While !isMounted, render a skeleton layout:
+  - Header skeleton: two stacked lines (w-32 h-4 and w-20 h-3) with animate-pulse bg-slate-800
+  - Body skeleton: a large rounded rectangle (h-48) with animate-pulse bg-slate-800
+Wrap skeleton and real content in framer-motion AnimatePresence so real content fades in (opacity 0→1, duration 0.3s) after mount.
+
+### 3. Remove Admin Link / Add About Us — src/app/page.tsx
+- Remove the <a href="/admin/login"> element entirely from the header
+- Add an "درباره ما" button in the same position (mr-auto):
+  - onClick: toggle `showAbout` boolean state
+  - Styling: text-slate-500 hover:text-teal-400 text-xs transition-colors
+- Below the header (outside sticky header, inside main content area), add:
+  <AnimatePresence>
+    {showAbout && (
+      <motion.div
+        initial={{ opacity: 0, height: 0 }}
+        animate={{ opacity: 1, height: 'auto' }}
+        exit={{ opacity: 0, height: 0 }}
+        transition={{ duration: 0.25 }}
+        className="overflow-hidden"
+      >
+        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 mb-4 space-y-2">
+          <h2 className="text-teal-400 font-bold text-sm">درباره ما</h2>
+          <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">{publicSettings.about_us_text}</p>
+          <p className="text-slate-600 text-xs mt-2">{publicSettings.footer_text}</p>
+        </div>
+      </motion.div>
+    )}
+  </AnimatePresence>
+- Lazy load: only fetch about_us content when showAbout first becomes true (separate fetch if needed, or use publicSettings already fetched)
+
+### 4. Tool Disabled State — src/app/page.tsx
+After fetching publicSettings, if tool_enabled === false:
+Show instead of the normal upload UI:
+  <div className="flex flex-col items-center justify-center py-24 space-y-4">
+    <svg viewBox="0 0 24 24" fill="none" className="w-12 h-12 text-slate-600">
+      <rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+    <p className="text-slate-400 text-center max-w-sm text-sm">{publicSettings.tool_disabled_message}</p>
+  </div>
+
+### 5. Dynamic Header Text — src/app/page.tsx
+Replace hardcoded strings in the heading section:
+  - "دستبار تصویر درنیکا وب" → {publicSettings.app_title}
+  - "فشرده‌سازی هوشمند تصویر بدون افت کیفیت" → first part of app_subtitle (before "بدون"), <span className="text-teal-400"> around remainder
+  - JPEG/PNG description → {publicSettings.app_formats_text}
+
+### 6. Compression Animation — src/components/upload/CompressionAnimation.tsx (NEW FILE)
+Create a framer-motion animation component:
+Props: { progress: number }  (0–100)
+
+Design — Mosaic Pixel Scatter:
+- A 5×5 grid of small square tiles (each ~28px, gap-1)
+- Each tile has a random teal/emerald/slate color (assign on mount, stable)
+- Animation loop (repeat: Infinity, repeatType: 'mirror', duration: 1.2 + random offset):
+  - Scattered phase: each tile translates to a random x/y (±40px), rotates ±15°, opacity 0.2
+  - Assembled phase: tiles return to grid position, opacity 1
+- Use framer-motion `variants` with `staggerChildren: 0.04`
+- Below the grid: text "در حال پردازش..." with an animated pulsing dot (animate opacity 0→1→0)
+- Below that: a thin progress bar (h-1, bg-teal-500) width = `${progress}%`, with transition
+- Container: flex flex-col items-center gap-6 py-12
+
+In src/app/page.tsx:
+- Import CompressionAnimation
+- In the 'compressing' phase section, replace the existing upload progress area with:
+  <CompressionAnimation progress={uploadProgress} />
+
+### 7. File Expiry Timer — src/app/page.tsx
+When phase === 'done', below the results grid:
+- State: timeLeft (number, initialized to Math.floor(publicSettings.cleanup_interval_ms / 1000))
+- State: expired (boolean)
+- useEffect: start setInterval countdown when phase becomes 'done', clear on reset
+- Render:
+  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 flex items-center justify-center gap-2 text-amber-400/80 text-xs">
+    <svg viewBox="0 0 20 20" fill="none" className="w-4 h-4 shrink-0">
+      <circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="1.5"/>
+      <path d="M10 6v4l2.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+    {expired
+      ? 'فایل‌ها از سرور حذف شدند'
+      : `فایل‌های شما تا ${Math.floor(timeLeft/60).toString().padStart(2,'0')}:${(timeLeft%60).toString().padStart(2,'0')} دیگر از سرور حذف می‌شوند`
+    }
+  </motion.div>
+- When expired: disable all download buttons (pass `disabled` prop to DownloadButton)
+
+### 8. DownloadButton — src/components/upload/DownloadButton.tsx (NEW FILE)
+'use client' component.
+Props:
+  url: string;
+  filename: string;
+  label: string;
+  variant?: 'primary' | 'secondary';
+  disabled?: boolean;
+
+Implementation:
+- State: downloading (bool), downloadProgress (0–100), error (string|null)
+- onClick handler (async):
+  1. Set downloading=true, downloadProgress=0, error=null
+  2. const res = await fetch(url)
+  3. Check res.ok, if not throw error
+  4. const contentLength = res.headers.get('content-length')
+  5. Use res.body ReadableStream reader to track bytes received
+  6. Build Uint8Array chunks, update downloadProgress as (received/total)*100
+  7. If no content-length: skip progress (just show spinner)
+  8. On complete: create Blob, URL.createObjectURL, create <a>, click, revokeObjectURL
+  9. Set downloading=false
+  10. On error: set error message, downloading=false
+- Render: a <button> with:
+  - Relative positioning so progress bar overlays button background
+  - Inside: a <div> with absolute inset-y-0 left-0 bg-teal-600/30 transition-all that grows to `downloadProgress%` width
+  - Label text on top (z-10 relative)
+  - Spinner SVG when downloading (replace label)
+  - Disabled state when disabled prop=true or expired
+- variant='primary': teal bg, variant='secondary': slate bg
+
+### 9. Update ProgressCard.tsx — src/components/upload/ProgressCard.tsx
+Replace the existing download <a> or <button> with <DownloadButton>:
+  <DownloadButton
+    url={`/api/download?sessionId=${sessionId}&jobId=${job.jobId}`}
+    filename={job.outputFilename ?? job.filename}
+    label="دانلود"
+    variant="primary"
+    disabled={expired}
+  />
+Add `expired` and `sessionId` props to ProgressCard.
+(Update ImageGrid.tsx to pass these down if needed.)
+
+### 10. Batch Download Button in page.tsx
+Replace the existing batch download button with:
+  <DownloadButton
+    url={`/api/download/batch?sessionId=${sessionId}`}
+    filename={`dornika-compressed-${sessionId?.slice(0,8)}.zip`}
+    label="دانلود همه (ZIP)"
+    variant="secondary"
+    disabled={expired}
+  />
+
+### 11. Update PROJECT_RULES.md Section 3 (Folder Structure)
+Add:
+  src/components/upload/CompressionAnimation.tsx
+  src/components/upload/DownloadButton.tsx
+
+### 12. Update PHASES.md
+Mark Phase 11 as ✅ تکمیل with date 1404/02/05.
+
+## Verification checklist:
+- [ ] npm run build passes with 0 TypeScript errors
+- [ ] About Us panel opens/closes correctly
+- [ ] tool_enabled=false shows disabled message
+- [ ] CompressionAnimation shows during compression phase
+- [ ] Expiry timer counts down after done
+- [ ] DownloadButton shows in-page progress bar during download
+- [ ] Batch ZIP download works with DownloadButton
+```
+
+---
+
+## فاز ۱۲ — Admin Analytics & Enhanced Logging
+
+**وضعیت:** ⏳ در انتظار  
+**پیش‌نیاز:** فاز ۱۰ و ۱۱ تکمیل  
+**فایل‌های خروجی:**
+- `src/lib/db/client.ts` — migration ستون‌های جدید logs + insertLog آپدیت + stats query
+- `src/types/index.ts` — LogEntry فیلدهای جدید
+- `src/app/api/upload/route.ts` — لاگ کامل با device/browser/success/durationMs
+- `src/app/api/admin/logs/route.ts` — فیلترها
+- `src/app/api/admin/stats/route.ts` ← جدید
+- `src/components/admin/DashboardCharts.tsx` ← جدید
+- `src/components/admin/LogsTable.tsx` — فیلتر bar + ستون‌های جدید
+- `src/app/admin/dashboard/page.tsx` — DashboardCharts اضافه
+- `package.json` — recharts اضافه
+
+---
+
+### 📋 PROMPT فاز ۱۲
+
+```
+[ATTACH: PROJECT_RULES.md]
+[ATTACH: PHASES.md]
+
+Read PROJECT_RULES.md carefully before writing any code. Phases 10 and 11 are complete.
+
+## TASK: Phase 12 — Admin Analytics & Enhanced Logging
+
+### 0. Install recharts
+Run: npm install recharts@2
+recharts is bundled at build time — no CDN, fully local. Add it to PROJECT_RULES.md Section 2 stack table.
+
+### 1. DB Migration — src/lib/db/client.ts
+In initDb(), after existing table creation, add idempotent column migrations:
+  try { db.exec("ALTER TABLE logs ADD COLUMN success INTEGER DEFAULT 1"); } catch {}
+  try { db.exec("ALTER TABLE logs ADD COLUMN device_type TEXT DEFAULT 'unknown'"); } catch {}
+  try { db.exec("ALTER TABLE logs ADD COLUMN browser TEXT DEFAULT 'unknown'"); } catch {}
+  try { db.exec("ALTER TABLE logs ADD COLUMN os TEXT DEFAULT 'unknown'"); } catch {}
+
+Update insertLog() to accept and store: success, device_type, browser, os
+Update getLogs() to return: success (as boolean), deviceType, browser, os fields
+
+Add new getChartStats() function returning:
+  {
+    daily: Array<{ date: string; total: number; success: number; fail: number }>,   // last 30 days
+    weekly: Array<{ week: string; total: number; success: number; fail: number }>,  // last 12 weeks
+    monthly: Array<{ month: string; total: number; success: number; fail: number }>, // last 12 months
+    deviceBreakdown: Array<{ name: string; value: number }>,
+    browserBreakdown: Array<{ name: string; value: number }>,
+    totalFiles: number;
+    totalSavedMB: number;
+  }
+Use SQLite: GROUP BY date(timestamp) for daily, strftime('%Y-%W', timestamp) for weekly, strftime('%Y-%m', timestamp) for monthly.
+
+Update getLogs() to accept optional filters: { fromDate?: number; toDate?: number; deviceType?: string; success?: 0|1 }
+Build WHERE clause with params array (OWASP A03: no string concat in SQL).
+
+### 2. Types — src/types/index.ts
+Update LogEntry:
+  success: boolean;
+  deviceType: string;
+  browser: string;
+  os: string;
+
+### 3. User-Agent Parser + Fix Empty Log Values — src/app/api/upload/route.ts
+Add a parseUserAgent() helper function (regex only, no external libs):
+  function parseUserAgent(ua: string): { deviceType: 'mobile'|'desktop'; browser: string; os: string } {
+    const deviceType = /Mobile|Android|iPhone|iPad|iPod/i.test(ua) ? 'mobile' : 'desktop';
+    let browser = 'Other';
+    if (/Edg\//i.test(ua)) browser = 'Edge';
+    else if (/OPR\//i.test(ua)) browser = 'Opera';
+    else if (/Chrome\//i.test(ua)) browser = 'Chrome';
+    else if (/Firefox\//i.test(ua)) browser = 'Firefox';
+    else if (/Safari\//i.test(ua)) browser = 'Safari';
+    let os = 'Other';
+    if (/Windows/i.test(ua)) os = 'Windows';
+    else if (/Android/i.test(ua)) os = 'Android';
+    else if (/iPhone|iPad|iPod/i.test(ua)) os = 'iOS';
+    else if (/Mac OS X/i.test(ua)) os = 'macOS';
+    else if (/Linux/i.test(ua)) os = 'Linux';
+    return { deviceType, browser, os };
+  }
+
+Fix insertLog call: currently logging approximate/zero data. Update to pass real values:
+- totalOriginalBytes: sum of file.size for all files
+- totalCompressedBytes: 0 at upload time (compression happens async) — keep as 0 but log after session completion
+  ACTUALLY: move the insertLog call to AFTER all jobs are enqueued. Calculate totalOriginalBytes from actual Buffer sizes.
+  durationMs: Date.now() - startTime (startTime = Date.now() before the files loop)
+  success: true (upload accepted — actual compression errors tracked separately in SSE)
+  Parse UA: const { deviceType, browser, os } = parseUserAgent(ua)
+  Pass all to insertLog
+
+### 4. Stats API — src/app/api/admin/stats/route.ts (NEW FILE)
+JWT-gated GET endpoint:
+  const stats = getChartStats();
+  return NextResponse.json(stats);
+Apply existing apiRateLimiter.
+
+### 5. Logs API — src/app/api/admin/logs/route.ts
+Add filter params from searchParams:
+  const fromDate = searchParams.get('from_date') → parse as timestamp ms
+  const toDate = searchParams.get('to_date') → parse as timestamp ms
+  const deviceType = searchParams.get('device_type') ?? undefined
+  const successParam = searchParams.get('success') → parse as 0|1|undefined
+Pass to getLogs(limit, offset, { fromDate, toDate, deviceType, success: successParam })
+
+### 6. DashboardCharts — src/components/admin/DashboardCharts.tsx (NEW FILE)
+'use client' component. Import from 'recharts' (no CDN).
+State: activeTab ('daily'|'weekly'|'monthly'), data (from /api/admin/stats)
+
+Layout:
+- Summary cards row (total files, total saved MB) — styled like existing stats bar
+- Tab switcher: روزانه / هفتگی / ماهانه
+- BarChart (ResponsiveContainer width="100%" height={240}):
+  - XAxis: dataKey="date"|"week"|"month" depending on tab
+  - Three Bars: total (teal #14b8a6), success (emerald #10b981), fail (red #f87171)
+  - Tooltip with RTL text
+  - CartesianGrid stroke="#1e293b"
+  - All text color slate (#94a3b8)
+- Two PieCharts side by side (each 50% width, height 180):
+  - Left: device breakdown (mobile/desktop), colors: teal + slate
+  - Right: browser breakdown, 5 colors from palette
+  - Legend below each
+- Loading skeleton (same animate-pulse pattern as rest of app) while fetching
+
+### 7. LogsTable — src/components/admin/LogsTable.tsx
+Add filter bar above the table:
+  State: filters { fromDate: string; toDate: string; deviceType: string; success: string }
+  
+  Filter bar:
+  - Date range: two <input type="date"> (from_date, to_date), styled with slate border
+  - Device: <select> options: '' (همه), 'mobile' (موبایل), 'desktop' (دسکتاپ)
+  - Status: <select> options: '' (همه), '1' (موفق), '0' (ناموفق)
+  - "اعمال فیلتر" button (teal) + "پاک کردن" button (slate)
+  
+  Pass filters as query params to /api/admin/logs fetch call.
+
+Update table columns:
+- Remove 'userAgentHash' column
+- Add: وضعیت (green ✓ badge for success, red ✗ badge for fail), دستگاه (deviceType), مرورگر (browser)
+- Fix stats bar: show actual values from a selected log row (or from totals)
+  Actually: fix the stats bar labels — currently showing 0 for some values.
+  The stats bar shows: todayCount, totalSavingsMB, activeSessions — these come from getStats() API
+  Make sure getStats() in db/client.ts returns correct non-zero values.
+
+Update exportCsv() to include new columns: success, deviceType, browser, os.
+
+### 8. Admin Dashboard Page — src/app/admin/dashboard/page.tsx
+Import and add DashboardCharts above LogsTable:
+  <div className="max-w-7xl mx-auto p-6 space-y-8">
+    <DashboardCharts />
+    <LogsTable />
+    <SettingsForm />
+  </div>
+
+### 9. Update PROJECT_RULES.md Section 2 (Stack Table)
+Add recharts row:
+  | recharts | ^2.x | Admin dashboard charts |
+
+### 10. Update PROJECT_RULES.md Section 3 (Folder Structure)
+Add:
+  src/app/api/admin/stats/route.ts
+  src/components/admin/DashboardCharts.tsx
+
+### 11. Update PHASES.md
+Mark Phase 12 as ✅ تکمیل with date 1404/02/05.
+
+## Verification checklist:
+- [ ] npm run build passes with 0 TypeScript errors
+- [ ] GET /api/admin/stats returns chart data (JWT required)
+- [ ] DashboardCharts shows bar chart with tab switching
+- [ ] PieCharts show device/browser breakdown
+- [ ] LogsTable filter bar: date range, device, status filters work
+- [ ] After a compression: logs show correct originalSize, durationMs, deviceType, browser
+- [ ] CSV export includes all new fields
+- [ ] Stats bar shows non-zero values
 ```
 
 ---
