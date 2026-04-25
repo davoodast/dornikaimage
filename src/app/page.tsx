@@ -312,18 +312,28 @@ export default function Home() {
                 className="space-y-6"
               >
                 <AnimatePresence>
-                  {!sessionId && isCompressing && (
+                  {/* Show animation the whole time we're compressing (upload + processing) */}
+                  {phase === 'compressing' && !allDone && (
                     <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      transition={{ duration: 0.3 }}
                     >
-                      <CompressionAnimation progress={uploadProgress} />
+                      <CompressionAnimation
+                        progress={sessionId
+                          ? jobs.size > 0
+                            ? Math.round((Array.from(jobs.values()).filter((j) => j.status === 'done' || j.status === 'error').length / jobs.size) * 100)
+                            : uploadProgress
+                          : uploadProgress}
+                        doneCount={Array.from(jobs.values()).filter((j) => j.status === 'done' || j.status === 'error').length}
+                        totalCount={jobs.size}
+                      />
                     </motion.div>
                   )}
                 </AnimatePresence>
 
-                {sessionId && (
+                {sessionId && allDone && (
                   <ImageGrid
                     jobs={jobs}
                     sessionId={sessionId}

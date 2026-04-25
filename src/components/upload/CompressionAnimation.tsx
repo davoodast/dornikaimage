@@ -3,74 +3,151 @@ import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 
 interface CompressionAnimationProps {
+  /** 0–100: overall compression progress */
   progress: number;
+  /** how many files done */
+  doneCount?: number;
+  /** total files */
+  totalCount?: number;
 }
 
-const TILE_COLORS = [
-  'bg-teal-500', 'bg-teal-600', 'bg-emerald-500', 'bg-emerald-600',
-  'bg-teal-400', 'bg-slate-600', 'bg-teal-500', 'bg-emerald-500',
-  'bg-teal-600', 'bg-slate-700', 'bg-teal-500', 'bg-emerald-500',
-  'bg-teal-400', 'bg-teal-600', 'bg-emerald-500', 'bg-slate-600',
-  'bg-teal-500', 'bg-emerald-600', 'bg-teal-600', 'bg-slate-700',
-  'bg-teal-500', 'bg-emerald-500', 'bg-teal-400', 'bg-slate-600', 'bg-teal-600',
+// 8×6 grid = 48 pixel tiles simulating an image being compressed
+const COLS = 8;
+const ROWS = 6;
+const TOTAL = COLS * ROWS;
+
+// Stable "original image" colour palette — warm/saturated colours
+const ORIGINAL_COLORS = [
+  '#f97316', '#ef4444', '#a855f7', '#3b82f6',
+  '#f97316', '#eab308', '#ec4899', '#22c55e',
+  '#ef4444', '#06b6d4', '#f97316', '#a855f7',
+  '#3b82f6', '#eab308', '#22c55e', '#ec4899',
+  '#a855f7', '#ef4444', '#06b6d4', '#f97316',
+  '#22c55e', '#3b82f6', '#eab308', '#ec4899',
+  '#f97316', '#a855f7', '#ef4444', '#22c55e',
+  '#06b6d4', '#3b82f6', '#f97316', '#eab308',
+  '#ec4899', '#ef4444', '#a855f7', '#22c55e',
+  '#f97316', '#06b6d4', '#3b82f6', '#eab308',
+  '#22c55e', '#ec4899', '#ef4444', '#f97316',
+  '#a855f7', '#06b6d4', '#3b82f6', '#eab308',
 ];
 
-export default function CompressionAnimation({ progress }: CompressionAnimationProps) {
-  const tileOffsets = useMemo(
-    () =>
-      Array.from({ length: 25 }, (_, i) => ({
-        x: Math.sin(i * 1.7 + 0.5) * 40,
-        y: Math.cos(i * 2.3 + 1.1) * 40,
-        rotate: Math.sin(i * 3.1) * 15,
-        duration: 1.2 + (i % 5) * 0.1,
-      })),
+// "Compressed" colour: teal/emerald mono palette
+const COMPRESSED_COLORS = [
+  '#0d9488', '#0f766e', '#14b8a6', '#0d9488',
+  '#0f766e', '#14b8a6', '#0d9488', '#0f766e',
+  '#14b8a6', '#0d9488', '#0f766e', '#14b8a6',
+  '#0d9488', '#0f766e', '#14b8a6', '#0d9488',
+  '#0f766e', '#14b8a6', '#0d9488', '#0f766e',
+  '#14b8a6', '#0d9488', '#0f766e', '#14b8a6',
+  '#0d9488', '#0f766e', '#14b8a6', '#0d9488',
+  '#0f766e', '#14b8a6', '#0d9488', '#0f766e',
+  '#14b8a6', '#0d9488', '#0f766e', '#14b8a6',
+  '#0d9488', '#0f766e', '#14b8a6', '#0d9488',
+  '#0f766e', '#14b8a6', '#0d9488', '#0f766e',
+  '#14b8a6', '#0d9488', '#0f766e', '#14b8a6',
+];
+
+export default function CompressionAnimation({
+  progress,
+  doneCount = 0,
+  totalCount = 0,
+}: CompressionAnimationProps) {
+  // How many tiles should be "compressed" based on progress
+  const compressedTiles = Math.round((progress / 100) * TOTAL);
+
+  // Stable per-tile animation delay (left→right, top→bottom scan order)
+  const delays = useMemo(
+    () => Array.from({ length: TOTAL }, (_, i) => (i / TOTAL) * 0.8),
     [],
   );
 
   return (
-    <div className="flex flex-col items-center gap-6 py-12">
-      {/* 5×5 mosaic grid */}
-      <div className="grid grid-cols-5 gap-1">
-        {tileOffsets.map((offset, i) => (
-          <motion.div
-            key={i}
-            className={`w-7 h-7 rounded-sm ${TILE_COLORS[i]}`}
-            animate={{
-              x: [0, offset.x, 0],
-              y: [0, offset.y, 0],
-              rotate: [0, offset.rotate, 0],
-              opacity: [1, 0.2, 1],
-            }}
-            transition={{
-              repeat: Infinity,
-              repeatType: 'loop',
-              duration: offset.duration,
-              ease: 'easeInOut',
-              delay: i * 0.04,
-            }}
-          />
-        ))}
+    <div className="flex flex-col items-center gap-5 py-10">
+      {/* Header */}
+      <div className="flex items-center gap-2.5">
+        {/* Animated "compress" icon */}
+        <motion.div
+          animate={{ scale: [1, 0.88, 1] }}
+          transition={{ repeat: Infinity, duration: 1.6, ease: 'easeInOut' }}
+        >
+          <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5 text-teal-400">
+            <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+            <path d="M9 9l6 6M15 9l-6 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+          </svg>
+        </motion.div>
+        <span className="text-slate-300 text-sm font-medium">
+          {progress < 100 ? 'در حال فشرده‌سازی' : 'تکمیل شد'}
+          {totalCount > 0 && (
+            <span className="text-slate-500 mr-1.5 text-xs">
+              ({doneCount}/{totalCount} تصویر)
+            </span>
+          )}
+        </span>
       </div>
 
-      {/* Label */}
-      <div className="flex items-center gap-1 text-slate-400 text-sm">
-        <span>در حال پردازش</span>
-        <motion.span
-          animate={{ opacity: [1, 0, 1] }}
-          transition={{ repeat: Infinity, duration: 1.2, ease: 'easeInOut' }}
-        >
-          ...
-        </motion.span>
+      {/* Pixel grid — 8×6 */}
+      <div
+        className="grid gap-0.5"
+        style={{ gridTemplateColumns: `repeat(${COLS}, 1fr)` }}
+      >
+        {Array.from({ length: TOTAL }, (_, i) => {
+          const isCompressed = i < compressedTiles;
+          return (
+            <motion.div
+              key={i}
+              className="rounded-[2px]"
+              style={{ width: 22, height: 22 }}
+              animate={
+                isCompressed
+                  ? {
+                      backgroundColor: COMPRESSED_COLORS[i % COMPRESSED_COLORS.length],
+                      scale: 0.72,
+                      opacity: 0.85,
+                    }
+                  : {
+                      backgroundColor: ORIGINAL_COLORS[i % ORIGINAL_COLORS.length],
+                      scale: 1,
+                      opacity: 1,
+                    }
+              }
+              transition={{
+                duration: 0.45,
+                delay: isCompressed ? delays[i] * 0.3 : 0,
+                ease: 'easeInOut',
+              }}
+            />
+          );
+        })}
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-4 text-[11px] text-slate-600">
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded-sm bg-orange-500" />
+          <span>اصلی</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded-sm bg-teal-500 scale-75" />
+          <span>فشرده‌شده</span>
+        </div>
       </div>
 
       {/* Progress bar */}
-      <div className="w-48 bg-slate-800 rounded-full h-1 overflow-hidden">
-        <motion.div
-          className="h-full bg-teal-500 rounded-full"
-          animate={{ width: `${progress}%` }}
-          transition={{ duration: 0.3 }}
-        />
+      <div className="w-52 space-y-1.5">
+        <div className="flex justify-between text-xs text-slate-500 tabular-nums">
+          <span>پیشرفت</span>
+          <span>{progress}%</span>
+        </div>
+        <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+          <motion.div
+            className="h-full bg-gradient-to-r from-teal-600 to-teal-400 rounded-full"
+            animate={{ width: `${progress}%` }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
+          />
+        </div>
       </div>
     </div>
   );
 }
+
