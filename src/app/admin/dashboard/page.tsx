@@ -4,6 +4,7 @@ import { verifyToken } from '@/lib/auth/jwt';
 import LogsTable from '@/components/admin/LogsTable';
 import SettingsForm from '@/components/admin/SettingsForm';
 import LogoutButton from '@/components/admin/LogoutButton';
+import DashboardCharts from '@/components/admin/DashboardCharts';
 
 export default async function AdminDashboardPage() {
   const cookieStore = cookies();
@@ -40,6 +41,7 @@ export default async function AdminDashboardPage() {
       </header>
 
       <div className="max-w-7xl mx-auto p-6 space-y-8">
+        <DashboardCharts />
         <LogsTable />
         <SettingsForm />
       </div>

@@ -43,6 +43,10 @@ export interface LogEntry {
   savingsPercent: number;
   userAgentHash: string;
   durationMs?: number;
+  success: boolean;
+  deviceType: string;
+  browser: string;
+  os: string;
 }
 
 export interface AdminSettings {

@@ -17,7 +17,25 @@ const MAX_FILES = () => Number(process.env.MAX_FILES_PER_UPLOAD) || 50;
 const UPLOADS_DIR = path.resolve(process.cwd(), 'uploads');
 const COMPRESSED_DIR = path.resolve(process.cwd(), 'compressed');
 
+function parseUserAgent(ua: string): { deviceType: 'mobile' | 'desktop'; browser: string; os: string } {
+  const deviceType = /Mobile|Android|iPhone|iPad|iPod/i.test(ua) ? 'mobile' : 'desktop';
+  let browser = 'Other';
+  if (/Edg\//i.test(ua)) browser = 'Edge';
+  else if (/OPR\//i.test(ua)) browser = 'Opera';
+  else if (/Chrome\//i.test(ua)) browser = 'Chrome';
+  else if (/Firefox\//i.test(ua)) browser = 'Firefox';
+  else if (/Safari\//i.test(ua)) browser = 'Safari';
+  let os = 'Other';
+  if (/Windows/i.test(ua)) os = 'Windows';
+  else if (/Android/i.test(ua)) os = 'Android';
+  else if (/iPhone|iPad|iPod/i.test(ua)) os = 'iOS';
+  else if (/Mac OS X/i.test(ua)) os = 'macOS';
+  else if (/Linux/i.test(ua)) os = 'Linux';
+  return { deviceType, browser, os };
+}
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const startTime = Date.now();
   let formData: FormData;
   try {
     formData = await req.formData();
@@ -48,6 +66,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const queue = getCompressionQueue();
   const jobs: { jobId: string; filename: string }[] = [];
+  let totalOriginalBytes = 0;
 
   for (const file of files) {
     if (file.size > MAX_FILE_SIZE()) {
@@ -56,6 +75,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    totalOriginalBytes += buffer.length;
 
     // OWASP A08: detect format from magic bytes, not filename/MIME
     const detectedFormat = validateFileSignature(buffer);
@@ -97,7 +117,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // Log the upload event (OWASP A09)
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
   const ua = req.headers.get('user-agent') ?? 'unknown';
-  const totalSize = jobs.length; // approximate — we don't need exact bytes here
+  const { deviceType, browser, os } = parseUserAgent(ua);
   try {
     const timestamp = new Date().toISOString();
     insertLog({
@@ -105,12 +125,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       ipHash: hashValue(ip),
       sessionId,
       fileCount: jobs.length,
-      totalOriginalBytes: 0, // updated later by compression complete event
+      totalOriginalBytes,
       totalCompressedBytes: 0,
       savingsPercent: 0,
       userAgentHash: hashValue(ua),
+      durationMs: Date.now() - startTime,
+      success: true,
+      deviceType,
+      browser,
+      os,
     });
-    logUpload({ sessionId, fileCount: jobs.length, totalSizeBytes: totalSize, ipHash: hashValue(ip) });
+    logUpload({ sessionId, fileCount: jobs.length, totalSizeBytes: totalOriginalBytes, ipHash: hashValue(ip) });
   } catch {
     // logging failure must never break the upload response
   }

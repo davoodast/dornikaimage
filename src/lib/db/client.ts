@@ -56,6 +56,12 @@ function initDb(db: DatabaseSync): void {
     );
   `);
 
+  // Phase 12: idempotent column migrations
+  try { db.exec("ALTER TABLE logs ADD COLUMN success INTEGER DEFAULT 1"); } catch { /* already exists */ }
+  try { db.exec("ALTER TABLE logs ADD COLUMN device_type TEXT DEFAULT 'unknown'"); } catch { /* already exists */ }
+  try { db.exec("ALTER TABLE logs ADD COLUMN browser TEXT DEFAULT 'unknown'"); } catch { /* already exists */ }
+  try { db.exec("ALTER TABLE logs ADD COLUMN os TEXT DEFAULT 'unknown'"); } catch { /* already exists */ }
+
   // Default settings
   const defaults: Record<string, string> = {
     cleanup_interval_ms: '3600000',
@@ -84,8 +90,9 @@ export function insertLog(entry: Omit<LogEntry, 'id'>): void {
   const stmt = db.prepare(`
     INSERT INTO logs
       (timestamp, ip_hash, session_id, file_count, total_original_bytes,
-       total_compressed_bytes, savings_percent, user_agent_hash, duration_ms, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       total_compressed_bytes, savings_percent, user_agent_hash, duration_ms,
+       success, device_type, browser, os, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   stmt.run(
     entry.timestamp,
@@ -97,18 +104,50 @@ export function insertLog(entry: Omit<LogEntry, 'id'>): void {
     entry.savingsPercent,
     entry.userAgentHash,
     entry.durationMs ?? null,
+    entry.success ? 1 : 0,
+    entry.deviceType ?? 'unknown',
+    entry.browser ?? 'unknown',
+    entry.os ?? 'unknown',
     Date.now(),
   );
 }
 
-export function getLogs(limit: number, offset: number): LogEntry[] {
+export interface LogFilters {
+  fromDate?: number;
+  toDate?: number;
+  deviceType?: string;
+  success?: 0 | 1;
+}
+
+export function getLogs(limit: number, offset: number, filters?: LogFilters): LogEntry[] {
   const db = getDb();
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
+
+  if (filters?.fromDate != null) {
+    conditions.push('created_at >= ?');
+    params.push(filters.fromDate);
+  }
+  if (filters?.toDate != null) {
+    conditions.push('created_at <= ?');
+    params.push(filters.toDate);
+  }
+  if (filters?.deviceType) {
+    conditions.push('device_type = ?');
+    params.push(filters.deviceType);
+  }
+  if (filters?.success != null) {
+    conditions.push('success = ?');
+    params.push(filters.success);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   const rows = db.prepare(`
     SELECT id, timestamp, ip_hash, session_id, file_count,
            total_original_bytes, total_compressed_bytes, savings_percent,
-           user_agent_hash, duration_ms
-    FROM logs ORDER BY created_at DESC LIMIT ? OFFSET ?
-  `).all(limit, offset) as Record<string, unknown>[];
+           user_agent_hash, duration_ms, success, device_type, browser, os
+    FROM logs ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?
+  `).all(...params, limit, offset) as Record<string, unknown>[];
 
   return rows.map((r) => ({
     id: r.id as number,
@@ -121,12 +160,37 @@ export function getLogs(limit: number, offset: number): LogEntry[] {
     savingsPercent: r.savings_percent as number,
     userAgentHash: r.user_agent_hash as string,
     durationMs: r.duration_ms as number | undefined,
+    success: (r.success as number) === 1,
+    deviceType: (r.device_type as string) ?? 'unknown',
+    browser: (r.browser as string) ?? 'unknown',
+    os: (r.os as string) ?? 'unknown',
   }));
 }
 
-export function getLogsCount(): number {
+export function getLogsCount(filters?: LogFilters): number {
   const db = getDb();
-  const row = db.prepare('SELECT COUNT(*) as cnt FROM logs').get() as { cnt: number };
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
+
+  if (filters?.fromDate != null) {
+    conditions.push('created_at >= ?');
+    params.push(filters.fromDate);
+  }
+  if (filters?.toDate != null) {
+    conditions.push('created_at <= ?');
+    params.push(filters.toDate);
+  }
+  if (filters?.deviceType) {
+    conditions.push('device_type = ?');
+    params.push(filters.deviceType);
+  }
+  if (filters?.success != null) {
+    conditions.push('success = ?');
+    params.push(filters.success);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const row = db.prepare(`SELECT COUNT(*) as cnt FROM logs ${where}`).get(...params) as { cnt: number };
   return row.cnt;
 }
 
@@ -155,6 +219,83 @@ export function getStats(): {
     todayCount: todayRow.cnt,
     totalSavingsMB: Math.round((savingsRow.saved ?? 0) / (1024 * 1024)),
     activeSessions: activeRow.cnt,
+  };
+}
+
+export interface ChartStats {
+  daily: Array<{ date: string; total: number; success: number; fail: number }>;
+  weekly: Array<{ week: string; total: number; success: number; fail: number }>;
+  monthly: Array<{ month: string; total: number; success: number; fail: number }>;
+  deviceBreakdown: Array<{ name: string; value: number }>;
+  browserBreakdown: Array<{ name: string; value: number }>;
+  totalFiles: number;
+  totalSavedMB: number;
+}
+
+export function getChartStats(): ChartStats {
+  const db = getDb();
+
+  const dailyRows = db.prepare(`
+    SELECT date(timestamp) as date,
+           COUNT(*) as total,
+           SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as success,
+           SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as fail
+    FROM logs
+    WHERE created_at >= ?
+    GROUP BY date(timestamp)
+    ORDER BY date(timestamp) ASC
+  `).all(Date.now() - 30 * 24 * 3600 * 1000) as Array<{ date: string; total: number; success: number; fail: number }>;
+
+  const weeklyRows = db.prepare(`
+    SELECT strftime('%Y-%W', timestamp) as week,
+           COUNT(*) as total,
+           SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as success,
+           SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as fail
+    FROM logs
+    WHERE created_at >= ?
+    GROUP BY strftime('%Y-%W', timestamp)
+    ORDER BY strftime('%Y-%W', timestamp) ASC
+  `).all(Date.now() - 84 * 24 * 3600 * 1000) as Array<{ week: string; total: number; success: number; fail: number }>;
+
+  const monthlyRows = db.prepare(`
+    SELECT strftime('%Y-%m', timestamp) as month,
+           COUNT(*) as total,
+           SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as success,
+           SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as fail
+    FROM logs
+    WHERE created_at >= ?
+    GROUP BY strftime('%Y-%m', timestamp)
+    ORDER BY strftime('%Y-%m', timestamp) ASC
+  `).all(Date.now() - 365 * 24 * 3600 * 1000) as Array<{ month: string; total: number; success: number; fail: number }>;
+
+  const deviceRows = db.prepare(`
+    SELECT COALESCE(device_type, 'unknown') as name, COUNT(*) as value
+    FROM logs
+    GROUP BY device_type
+  `).all() as Array<{ name: string; value: number }>;
+
+  const browserRows = db.prepare(`
+    SELECT COALESCE(browser, 'unknown') as name, COUNT(*) as value
+    FROM logs
+    GROUP BY browser
+    ORDER BY value DESC
+    LIMIT 6
+  `).all() as Array<{ name: string; value: number }>;
+
+  const totalsRow = db.prepare(`
+    SELECT COUNT(*) as totalFiles,
+           SUM(total_original_bytes - total_compressed_bytes) as saved
+    FROM logs
+  `).get() as { totalFiles: number; saved: number | null };
+
+  return {
+    daily: dailyRows,
+    weekly: weeklyRows,
+    monthly: monthlyRows,
+    deviceBreakdown: deviceRows,
+    browserBreakdown: browserRows,
+    totalFiles: totalsRow.totalFiles,
+    totalSavedMB: Math.round((totalsRow.saved ?? 0) / (1024 * 1024)),
   };
 }
 

@@ -37,6 +37,7 @@
 | node-cron | ^3.x | Cleanup scheduler |
 | bcryptjs | ^2.x | Admin password hashing |
 | archiver | ^7.x | ZIP generation for batch download |
+| recharts | ^2.x | Admin dashboard charts |
 | @types/* | matching | TypeScript types |
 
 **Node.js:** 20 LTS (minimum)
@@ -70,6 +71,7 @@ dornikaimage/
 │   │           ├── logs/route.ts       # GET: paginated logs from SQLite (JWT-gated)
 │   │           ├── settings/route.ts   # GET+PATCH: admin settings (JWT-gated)
 │           ├── change-password/route.ts # POST: change admin password (JWT-gated)
+│           ├── stats/route.ts      # GET: chart stats (JWT-gated)
 │           └── logo/route.ts       # POST: upload new logo (magic bytes validated)
 │       └── public/
 │           └── settings/route.ts   # GET: public content settings (no auth)
@@ -81,7 +83,8 @@ dornikaimage/
 │   │   │   ├── CompressionAnimation.tsx # 5×5 mosaic tile scatter animation (framer-motion)
 │   │   │   └── DownloadButton.tsx      # In-page download with ReadableStream progress
 │   │   ├── admin/
-│   │   │   ├── LogsTable.tsx           # Paginated logs viewer + CSV export + stats bar
+│   │   │   ├── DashboardCharts.tsx     # recharts BarChart + PieChart (device/browser breakdown)
+│   │   │   ├── LogsTable.tsx           # Paginated logs viewer + filter bar + CSV export + stats bar
 │   │   │   ├── SettingsForm.tsx        # Settings form with slider + logo upload + toast
 │   │   │   └── LogoutButton.tsx        # Client-side logout button (clears cookie)
 │   │   └── pwa/
