@@ -62,6 +62,7 @@ export interface AdminSettings {
   footer_text: string;
   tool_enabled: boolean;
   tool_disabled_message: string;
+  log_enabled: boolean;
 }
 
 export interface JobProgress {

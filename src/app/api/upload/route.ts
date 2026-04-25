@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { validateFileSignature, sanitizeFilename, FORMAT_TO_EXT } from '@/lib/security/fileValidator';
 import { ALLOWED_MIME_TYPES } from '@/lib/security/validate';
 import { getCompressionQueue } from '@/lib/compression/queue';
-import { insertLog, hashValue } from '@/lib/db/client';
+import { insertLog, hashValue, getSetting } from '@/lib/db/client';
 import { logUpload, logValidationFailure } from '@/lib/logger/winston';
 import type { CompressionJob, CompressionLevel } from '@/types';
 
@@ -114,7 +114,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     jobs.push({ jobId, filename });
   }
 
-  // Log the upload event (OWASP A09)
+  // Log the upload event (OWASP A09) — only if logging is enabled
+  const logEnabled = getSetting('log_enabled') !== '0';
+  if (logEnabled) {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
   const ua = req.headers.get('user-agent') ?? 'unknown';
   const { deviceType, browser, os } = parseUserAgent(ua);
@@ -139,6 +141,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   } catch {
     // logging failure must never break the upload response
   }
+  } // end logEnabled check
 
   return NextResponse.json({ sessionId, jobs }, { status: 202 });
 }

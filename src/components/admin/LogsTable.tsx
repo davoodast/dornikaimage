@@ -1,19 +1,9 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { LogEntry } from '@/types';
 
-interface Stats {
-  todayCount: number;
-  totalSavingsMB: number;
-  activeSessions: number;
-}
-
-interface LogsResponse {
-  logs: LogEntry[];
-  total: number;
-  page: number;
-  stats: Stats;
-}
+const PAGE_SIZE = 30;
 
 interface Filters {
   fromDate: string;
@@ -22,45 +12,47 @@ interface Filters {
   success: string;
 }
 
-const PAGE_SIZE = 50;
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+interface LogsData {
+  logs: LogEntry[];
+  total: number;
+  stats: { todayCount: number; totalSavingsMB: number; activeSessions: number };
 }
 
-function formatDate(ts: string): string {
+function formatBytes(b: number): string {
+  if (b === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(b) / Math.log(1024));
+  return `${(b / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+}
+
+function formatTime(ts: string): string {
   try {
-    return new Intl.DateTimeFormat('fa-IR', {
-      dateStyle: 'short',
-      timeStyle: 'short',
-    }).format(new Date(ts));
+    return new Date(ts).toLocaleString('fa-IR', { dateStyle: 'short', timeStyle: 'short' });
   } catch {
     return ts;
   }
 }
 
-function filtersToParams(filters: Filters, page: number, limit: number): string {
-  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
-  if (filters.fromDate) {
-    params.set('from_date', String(new Date(filters.fromDate).setHours(0, 0, 0, 0)));
-  }
-  if (filters.toDate) {
-    params.set('to_date', String(new Date(filters.toDate).setHours(23, 59, 59, 999)));
-  }
-  if (filters.deviceType) params.set('device_type', filters.deviceType);
-  if (filters.success !== '') params.set('success', filters.success);
-  return params.toString();
+function filtersToParams(f: Filters, page: number, limit: number): string {
+  const p = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (f.fromDate) p.set('from_date', String(new Date(f.fromDate).getTime()));
+  if (f.toDate) p.set('to_date', String(new Date(f.toDate + 'T23:59:59').getTime()));
+  if (f.deviceType) p.set('device_type', f.deviceType);
+  if (f.success !== '') p.set('success', f.success);
+  return p.toString();
 }
 
 export default function LogsTable() {
-  const [data, setData] = useState<LogsResponse | null>(null);
-  const [page, setPage] = useState(1);
+  const [data, setData] = useState<LogsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<Filters>({ fromDate: '', toDate: '', deviceType: '', success: '' });
   const [appliedFilters, setAppliedFilters] = useState<Filters>({ fromDate: '', toDate: '', deviceType: '', success: '' });
+  const [showFilters, setShowFilters] = useState(false);
+  const [logEnabled, setLogEnabled] = useState(true);
+  const [clearingLogs, setClearingLogs] = useState(false);
+  const [togglingLog, setTogglingLog] = useState(false);
 
   const fetchLogs = useCallback(async (p: number, f: Filters) => {
     setLoading(true);
@@ -68,25 +60,63 @@ export default function LogsTable() {
     try {
       const qs = filtersToParams(f, p, PAGE_SIZE);
       const res = await fetch(`/api/admin/logs?${qs}`);
-      if (!res.ok) throw new Error('\u062e\u0637\u0627 \u062f\u0631 \u062f\u0631\u06cc\u0627\u0641\u062a \u0644\u0627\u06af\u200c\u0647\u0627');
-      setData(await res.json());
+      if (!res.ok) throw new Error('خطا در دریافت لاگ‌ها');
+      setData(await res.json() as LogsData);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '\u062e\u0637\u0627\u06cc \u0646\u0627\u0634\u0646\u0627\u062e\u062a\u0647');
+      setError((e as Error).message);
     } finally {
       setLoading(false);
     }
   }, []);
 
+  useEffect(() => { fetchLogs(page, appliedFilters); }, [page, appliedFilters, fetchLogs]);
+
   useEffect(() => {
-    fetchLogs(page, appliedFilters);
-  }, [page, appliedFilters, fetchLogs]);
+    fetch('/api/admin/settings')
+      .then((r) => r.json())
+      .then((s: { log_enabled?: boolean }) => {
+        if (typeof s.log_enabled === 'boolean') setLogEnabled(s.log_enabled);
+      })
+      .catch(() => {});
+  }, []);
+
+  async function toggleLog() {
+    setTogglingLog(true);
+    try {
+      await fetch('/api/admin/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ log_enabled: !logEnabled }),
+      });
+      setLogEnabled(!logEnabled);
+    } catch {
+      // silent
+    } finally {
+      setTogglingLog(false);
+    }
+  }
+
+  async function clearAllLogs() {
+    if (!confirm('همه لاگ‌ها پاک می‌شوند. ادامه می‌دهید؟')) return;
+    setClearingLogs(true);
+    try {
+      await fetch('/api/admin/logs', { method: 'DELETE' });
+      setPage(1);
+      await fetchLogs(1, appliedFilters);
+    } catch {
+      setError('خطا در پاک کردن لاگ‌ها');
+    } finally {
+      setClearingLogs(false);
+    }
+  }
 
   function applyFilters() {
     setPage(1);
     setAppliedFilters({ ...filters });
+    setShowFilters(false);
   }
 
-  function clearFilters() {
+  function clearFiltersState() {
     const empty: Filters = { fromDate: '', toDate: '', deviceType: '', success: '' };
     setFilters(empty);
     setPage(1);
@@ -95,16 +125,14 @@ export default function LogsTable() {
 
   function exportCsv() {
     if (!data?.logs.length) return;
-    const headers = ['\u0632\u0645\u0627\u0646', 'Session ID', '\u062a\u0639\u062f\u0627\u062f \u0641\u0627\u06cc\u0644', '\u0627\u0646\u062f\u0627\u0632\u0647 \u0627\u0635\u0644\u06cc', '\u0627\u0646\u062f\u0627\u0632\u0647 \u0641\u0634\u0631\u062f\u0647', '\u0635\u0631\u0641\u0647\u200c\u062c\u0648\u06cc\u06cc %', '\u0645\u062f\u062a (ms)', '\u0648\u0636\u0639\u06cc\u062a', '\u062f\u0633\u062a\u06af\u0627\u0647', '\u0645\u0631\u0648\u0631\u06af\u0631', '\u0633\u06cc\u0633\u062a\u0645\u200c\u0639\u0627\u0645\u0644'];
+    const headers = ['زمان', 'تعداد فایل', 'حجم اصلی', 'صرفه‌جویی %', 'مدت ms', 'وضعیت', 'دستگاه', 'مرورگر', 'OS'];
     const rows = data.logs.map((l) => [
       l.timestamp,
-      l.sessionId.slice(0, 8),
       l.fileCount,
       formatBytes(l.totalOriginalBytes),
-      formatBytes(l.totalCompressedBytes),
-      `${l.savingsPercent.toFixed(1)}%`,
+      l.savingsPercent.toFixed(1) + '%',
       l.durationMs ?? '',
-      l.success ? '\u0645\u0648\u0641\u0642' : '\u0646\u0627\u0645\u0648\u0641\u0642',
+      l.success ? 'موفق' : 'ناموفق',
       l.deviceType,
       l.browser,
       l.os,
@@ -114,211 +142,255 @@ export default function LogsTable() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `dornikaimage-logs-${Date.now()}.csv`;
+    a.download = `logs-${Date.now()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
   const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 1;
+  const activeFilterCount = Object.values(appliedFilters).filter(Boolean).length;
 
   return (
-    <section className="space-y-4">
-      {/* Stats bar */}
-      {data?.stats && (
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { label: '\u0622\u067e\u0644\u0648\u062f \u0627\u0645\u0631\u0648\u0632', value: data.stats.todayCount },
-            { label: '\u06a9\u0644 \u0635\u0631\u0641\u0647\u200c\u062c\u0648\u06cc\u06cc (MB)', value: data.stats.totalSavingsMB },
-            { label: '\u062c\u0644\u0633\u0627\u062a \u0641\u0639\u0627\u0644 (\u0633\u0627\u0639\u062a \u0627\u062e\u06cc\u0631)', value: data.stats.activeSessions },
-          ].map(({ label, value }) => (
-            <div
-              key={label}
-              className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center"
-            >
-              <div className="text-2xl font-bold text-teal-400">{value}</div>
-              <div className="text-xs text-slate-400 mt-1">{label}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
+    <section className="space-y-3">
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
-          <h2 className="font-semibold text-slate-100">\u0644\u0627\u06af\u200c\u0647\u0627\u06cc \u0633\u06cc\u0633\u062a\u0645</h2>
-          <div className="flex gap-2">
-            <button
-              onClick={() => fetchLogs(page, appliedFilters)}
-              disabled={loading}
-              className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-teal-400 transition-colors px-3 py-1.5 rounded-lg hover:bg-slate-800"
+
+        {/* Header */}
+        <div className="flex flex-wrap items-center gap-2 px-5 py-3.5 border-b border-slate-800">
+          <h2 className="font-semibold text-slate-100 flex-1 min-w-0 text-sm">
+            {'لاگ‌های سیستم'}
+          </h2>
+
+          {/* Log enable/disable toggle */}
+          <button
+            onClick={toggleLog}
+            disabled={togglingLog}
+            className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border transition-all disabled:opacity-50 ${
+              logEnabled
+                ? 'border-teal-600/40 bg-teal-900/20 text-teal-400'
+                : 'border-slate-700 text-slate-500'
+            }`}
+          >
+            <span
+              className="w-7 h-4 rounded-full relative transition-colors flex-shrink-0"
+              style={{ background: logEnabled ? '#14b8a6' : '#334155' }}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                />
-              </svg>
-              \u0628\u0627\u0632\u0646\u0634\u0627\u0646\u06cc
-            </button>
-            <button
-              onClick={exportCsv}
-              disabled={!data?.logs.length}
-              className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-emerald-400 transition-colors px-3 py-1.5 rounded-lg hover:bg-slate-800 disabled:opacity-40"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                />
-              </svg>
-              \u062e\u0631\u0648\u062c\u06cc CSV
-            </button>
-          </div>
+              <span
+                className="absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-all duration-200"
+                style={{ right: logEnabled ? '2px' : 'calc(100% - 14px)' }}
+              />
+            </span>
+            {logEnabled ? 'لاگ: فعال' : 'لاگ: غیرفعال'}
+          </button>
+
+          {/* Clear logs */}
+          <button
+            onClick={clearAllLogs}
+            disabled={clearingLogs || !data?.logs.length}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-red-900/40 text-red-400 hover:bg-red-900/20 transition-colors disabled:opacity-40"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            {clearingLogs ? 'در حال پاک کردن...' : 'پاک کردن'}
+          </button>
+
+          {/* Filter toggle */}
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+              activeFilterCount > 0
+                ? 'border-teal-600/50 text-teal-400 bg-teal-900/20'
+                : 'border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
+            </svg>
+            {'فیلتر'}{activeFilterCount > 0 && ` (${activeFilterCount})`}
+          </button>
+
+          {/* Refresh */}
+          <button
+            onClick={() => fetchLogs(page, appliedFilters)}
+            disabled={loading}
+            title="بارگذاری مجدد"
+            className="text-slate-500 hover:text-teal-400 p-1.5 rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40"
+          >
+            <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+
+          {/* CSV export */}
+          <button
+            onClick={exportCsv}
+            disabled={!data?.logs.length}
+            title="خروجی CSV"
+            className="text-slate-500 hover:text-emerald-400 p-1.5 rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+          </button>
         </div>
 
-        {/* Filter bar */}
-        <div className="px-5 py-3 border-b border-slate-800 bg-slate-900/50">
-          <div className="flex flex-wrap gap-3 items-end">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-slate-400">\u0627\u0632 \u062a\u0627\u0631\u06cc\u062e</label>
-              <input
-                type="date"
-                value={filters.fromDate}
-                onChange={(e) => setFilters((f) => ({ ...f, fromDate: e.target.value }))}
-                className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-teal-500"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-slate-400">\u062a\u0627 \u062a\u0627\u0631\u06cc\u062e</label>
-              <input
-                type="date"
-                value={filters.toDate}
-                onChange={(e) => setFilters((f) => ({ ...f, toDate: e.target.value }))}
-                className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-teal-500"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-slate-400">\u062f\u0633\u062a\u06af\u0627\u0647</label>
-              <select
-                value={filters.deviceType}
-                onChange={(e) => setFilters((f) => ({ ...f, deviceType: e.target.value }))}
-                className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-teal-500"
-              >
-                <option value="">\u0647\u0645\u0647</option>
-                <option value="mobile">\u0645\u0648\u0628\u0627\u06cc\u0644</option>
-                <option value="desktop">\u062f\u0633\u06a9\u062a\u0627\u067e</option>
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-slate-400">\u0648\u0636\u0639\u06cc\u062a</label>
-              <select
-                value={filters.success}
-                onChange={(e) => setFilters((f) => ({ ...f, success: e.target.value }))}
-                className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-teal-500"
-              >
-                <option value="">\u0647\u0645\u0647</option>
-                <option value="1">\u0645\u0648\u0641\u0642</option>
-                <option value="0">\u0646\u0627\u0645\u0648\u0641\u0642</option>
-              </select>
-            </div>
-            <div className="flex gap-2 pb-0.5">
-              <button
-                onClick={applyFilters}
-                className="px-4 py-1.5 text-sm rounded-lg bg-teal-600 hover:bg-teal-500 text-white transition-colors"
-              >
-                \u0627\u0639\u0645\u0627\u0644 \u0641\u06cc\u0644\u062a\u0631
-              </button>
-              <button
-                onClick={clearFilters}
-                className="px-4 py-1.5 text-sm rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors"
-              >
-                \u067e\u0627\u06a9 \u06a9\u0631\u062f\u0646
-              </button>
-            </div>
-          </div>
-        </div>
+        {/* Filter panel */}
+        <AnimatePresence>
+          {showFilters && (
+            <motion.div
+              key="filters"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden border-b border-slate-800"
+            >
+              <div className="px-5 py-4 bg-slate-900/50">
+                <div className="flex flex-wrap gap-3 items-end">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-slate-400">{'از تاریخ'}</label>
+                    <input
+                      type="date"
+                      value={filters.fromDate}
+                      onChange={(e) => setFilters((f) => ({ ...f, fromDate: e.target.value }))}
+                      className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-teal-500"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-slate-400">{'تا تاریخ'}</label>
+                    <input
+                      type="date"
+                      value={filters.toDate}
+                      onChange={(e) => setFilters((f) => ({ ...f, toDate: e.target.value }))}
+                      className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-teal-500"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-slate-400">{'دستگاه'}</label>
+                    <select
+                      value={filters.deviceType}
+                      onChange={(e) => setFilters((f) => ({ ...f, deviceType: e.target.value }))}
+                      className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-teal-500"
+                    >
+                      <option value="">{'همه'}</option>
+                      <option value="mobile">{'موبایل'}</option>
+                      <option value="desktop">{'دسکتاپ'}</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-slate-400">{'وضعیت'}</label>
+                    <select
+                      value={filters.success}
+                      onChange={(e) => setFilters((f) => ({ ...f, success: e.target.value }))}
+                      className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-teal-500"
+                    >
+                      <option value="">{'همه'}</option>
+                      <option value="1">{'موفق'}</option>
+                      <option value="0">{'ناموفق'}</option>
+                    </select>
+                  </div>
+                  <div className="flex gap-2 pb-0.5">
+                    <button
+                      onClick={applyFilters}
+                      className="px-4 py-1.5 text-sm rounded-lg bg-teal-600 hover:bg-teal-500 text-white transition-colors"
+                    >
+                      {'اعمال فیلتر'}
+                    </button>
+                    <button
+                      onClick={clearFiltersState}
+                      className="px-4 py-1.5 text-sm rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors"
+                    >
+                      {'پاک کردن'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {error && (
-          <div className="px-5 py-3 bg-red-900/20 text-red-400 text-sm">{error}</div>
+          <div className="px-5 py-3 bg-red-900/20 text-red-400 text-sm border-b border-red-900/30">
+            {error}
+          </div>
         )}
 
+        {/* Table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[580px]">
             <thead>
-              <tr className="border-b border-slate-800 text-slate-400">
-                <th className="text-right px-4 py-3 font-medium">\u0632\u0645\u0627\u0646</th>
-                <th className="text-right px-4 py-3 font-medium">Session</th>
-                <th className="text-right px-4 py-3 font-medium">\u0641\u0627\u06cc\u0644\u200c\u0647\u0627</th>
-                <th className="text-right px-4 py-3 font-medium">\u0627\u0635\u0644\u06cc</th>
-                <th className="text-right px-4 py-3 font-medium">\u0641\u0634\u0631\u062f\u0647</th>
-                <th className="text-right px-4 py-3 font-medium">\u0635\u0631\u0641\u0647\u200c\u062c\u0648\u06cc\u06cc</th>
-                <th className="text-right px-4 py-3 font-medium">\u0645\u062f\u062a</th>
-                <th className="text-right px-4 py-3 font-medium">\u0648\u0636\u0639\u06cc\u062a</th>
-                <th className="text-right px-4 py-3 font-medium">\u062f\u0633\u062a\u06af\u0627\u0647</th>
-                <th className="text-right px-4 py-3 font-medium">\u0645\u0631\u0648\u0631\u06af\u0631</th>
+              <tr className="border-b border-slate-800 text-slate-500">
+                <th className="text-right px-4 py-2.5 font-medium text-xs">{'زمان'}</th>
+                <th className="text-right px-4 py-2.5 font-medium text-xs">{'فایل‌ها'}</th>
+                <th className="text-right px-4 py-2.5 font-medium text-xs">{'حجم اصلی'}</th>
+                <th className="text-right px-4 py-2.5 font-medium text-xs">{'صرفه‌جویی'}</th>
+                <th className="text-right px-4 py-2.5 font-medium text-xs">{'وضعیت'}</th>
+                <th className="text-right px-4 py-2.5 font-medium text-xs">{'دستگاه'}</th>
+                <th className="text-right px-4 py-2.5 font-medium text-xs">{'مرورگر'}</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="border-b border-slate-800/50 animate-pulse">
-                    {Array.from({ length: 10 }).map((__, j) => (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i} className="border-b border-slate-800/40 animate-pulse">
+                    {Array.from({ length: 7 }).map((__, j) => (
                       <td key={j} className="px-4 py-3">
-                        <div className="h-4 bg-slate-800 rounded w-3/4" />
+                        <div className="h-3.5 bg-slate-800 rounded" style={{ width: `${55 + (j * 17) % 35}%` }} />
                       </td>
                     ))}
                   </tr>
                 ))
               ) : data?.logs.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-slate-500">
-                    \u0647\u06cc\u0686 \u0644\u0627\u06af\u06cc \u062b\u0628\u062a \u0646\u0634\u062f\u0647 \u0627\u0633\u062a
+                  <td colSpan={7} className="px-4 py-12 text-center text-slate-500 text-sm">
+                    {'هیچ لاگی ثبت نشده است'}
                   </td>
                 </tr>
               ) : (
-                data?.logs.map((log) => (
-                  <tr
-                    key={log.id}
-                    className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors"
+                data?.logs.map((log, idx) => (
+                  <motion.tr
+                    key={log.id ?? idx}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: Math.min(idx * 0.015, 0.3) }}
+                    className="border-b border-slate-800/40 hover:bg-slate-800/30 transition-colors"
                   >
-                    <td className="px-4 py-3 text-slate-300 whitespace-nowrap">
-                      {formatDate(log.timestamp)}
+                    <td className="px-4 py-2.5 text-slate-400 text-xs whitespace-nowrap">
+                      {formatTime(log.timestamp)}
                     </td>
-                    <td className="px-4 py-3 font-mono text-slate-400 text-xs">
-                      {log.sessionId.slice(0, 8)}\u2026
+                    <td className="px-4 py-2.5 text-slate-300 tabular-nums text-xs text-center">
+                      {log.fileCount}
                     </td>
-                    <td className="px-4 py-3 text-slate-300">{log.fileCount}</td>
-                    <td className="px-4 py-3 text-slate-400">
+                    <td className="px-4 py-2.5 text-slate-300 text-xs whitespace-nowrap">
                       {formatBytes(log.totalOriginalBytes)}
                     </td>
-                    <td className="px-4 py-3 text-slate-400">
-                      {formatBytes(log.totalCompressedBytes)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-emerald-400 font-medium">
-                        {log.savingsPercent.toFixed(1)}%
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-500">
-                      {log.durationMs != null ? `${log.durationMs}ms` : '\u2014'}
-                    </td>
-                    <td className="px-4 py-3">
-                      {log.success ? (
-                        <span className="inline-flex items-center gap-1 text-emerald-400 text-xs bg-emerald-400/10 px-2 py-0.5 rounded-full">
-                          \u2713 \u0645\u0648\u0641\u0642
-                        </span>
+                    <td className="px-4 py-2.5 text-xs tabular-nums">
+                      {log.savingsPercent > 0 ? (
+                        <span className="text-emerald-400">{log.savingsPercent.toFixed(1)}%</span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-red-400 text-xs bg-red-400/10 px-2 py-0.5 rounded-full">
-                          \u2717 \u0646\u0627\u0645\u0648\u0641\u0642
-                        </span>
+                        <span className="text-slate-600">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-slate-400 text-xs">{log.deviceType}</td>
-                    <td className="px-4 py-3 text-slate-400 text-xs">{log.browser}</td>
-                  </tr>
+                    <td className="px-4 py-2.5">
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          log.success
+                            ? 'bg-emerald-900/40 text-emerald-400'
+                            : 'bg-red-900/40 text-red-400'
+                        }`}
+                      >
+                        {log.success ? 'موفق' : 'ناموفق'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-400 text-xs">
+                      {log.deviceType === 'mobile'
+                        ? 'موبایل'
+                        : log.deviceType === 'desktop'
+                        ? 'دسکتاپ'
+                        : log.deviceType}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-400 text-xs">{log.browser}</td>
+                  </motion.tr>
                 ))
               )}
             </tbody>
@@ -326,25 +398,25 @@ export default function LogsTable() {
         </div>
 
         {/* Pagination */}
-        {totalPages > 1 && (
+        {!loading && totalPages > 1 && (
           <div className="flex items-center justify-between px-5 py-3 border-t border-slate-800">
-            <span className="text-sm text-slate-500">
-              \u0635\u0641\u062d\u0647 {page} \u0627\u0632 {totalPages} (\u06a9\u0644: {data?.total ?? 0})
+            <span className="text-xs text-slate-500">
+              {'صفحه '}{page}{' از '}{totalPages}
             </span>
             <div className="flex gap-2">
               <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1 || loading}
-                className="px-3 py-1.5 text-sm rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 transition-colors"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+                className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 transition-colors"
               >
-                \u0642\u0628\u0644\u06cc
+                {'قبلی'}
               </button>
               <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages || loading}
-                className="px-3 py-1.5 text-sm rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 transition-colors"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+                className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 transition-colors"
               >
-                \u0628\u0639\u062f\u06cc
+                {'بعدی'}
               </button>
             </div>
           </div>

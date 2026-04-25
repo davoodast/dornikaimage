@@ -76,6 +76,7 @@ function initDb(db: DatabaseSync): void {
     footer_text: 'تمام حقوق متعلق به درنیکا وب است — Dornika Web 2026',
     tool_enabled: '1',
     tool_disabled_message: 'این سرویس در حال حاضر در دسترس نیست. لطفاً بعداً مراجعه کنید.',
+    log_enabled: '1',
   };
   const insert = db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)`);
   for (const [key, value] of Object.entries(defaults)) {
@@ -230,6 +231,8 @@ export interface ChartStats {
   browserBreakdown: Array<{ name: string; value: number }>;
   totalFiles: number;
   totalSavedMB: number;
+  todayCount: number;
+  activeSessions: number;
 }
 
 export function getChartStats(): ChartStats {
@@ -288,6 +291,11 @@ export function getChartStats(): ChartStats {
     FROM logs
   `).get() as { totalFiles: number; saved: number | null };
 
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayRow2 = db.prepare('SELECT COUNT(*) as cnt FROM logs WHERE created_at >= ?').get(todayStart.getTime()) as { cnt: number };
+  const activeRow2 = db.prepare('SELECT COUNT(DISTINCT session_id) as cnt FROM logs WHERE created_at >= ?').get(Date.now() - 3_600_000) as { cnt: number };
+
   return {
     daily: dailyRows,
     weekly: weeklyRows,
@@ -296,7 +304,14 @@ export function getChartStats(): ChartStats {
     browserBreakdown: browserRows,
     totalFiles: totalsRow.totalFiles,
     totalSavedMB: Math.round((totalsRow.saved ?? 0) / (1024 * 1024)),
+    todayCount: todayRow2.cnt,
+    activeSessions: activeRow2.cnt,
   };
+}
+
+export function clearLogs(): void {
+  const db = getDb();
+  db.exec('DELETE FROM logs');
 }
 
 // ─── Settings helpers ─────────────────────────────────────────
@@ -336,6 +351,7 @@ export function getAllSettings(): AdminSettings {
     footer_text: map.footer_text ?? 'تمام حقوق متعلق به درنیکا وب است — Dornika Web 2026',
     tool_enabled: (map.tool_enabled ?? '1') === '1',
     tool_disabled_message: map.tool_disabled_message ?? 'این سرویس در حال حاضر در دسترس نیست. لطفاً بعداً مراجعه کنید.',
+    log_enabled: (map.log_enabled ?? '1') === '1',
   };
 }
 

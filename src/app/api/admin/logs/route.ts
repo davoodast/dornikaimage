@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { verifyToken, getTokenFromCookies } from '@/lib/auth/jwt';
-import { getLogs, getLogsCount, getStats, type LogFilters } from '@/lib/db/client';
+import { getLogs, getLogsCount, getStats, clearLogs, type LogFilters } from '@/lib/db/client';
 
 export async function GET(request: NextRequest) {
   const token = getTokenFromCookies(request.headers.get('cookie'));
@@ -40,4 +40,12 @@ export async function GET(request: NextRequest) {
   const stats = getStats();
 
   return NextResponse.json({ logs, total, page, stats });
+}
+
+export async function DELETE(request: NextRequest) {
+  const token = getTokenFromCookies(request.headers.get('cookie'));
+  const payload = token ? await verifyToken(token) : null;
+  if (!payload) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 });
+  clearLogs();
+  return NextResponse.json({ ok: true });
 }

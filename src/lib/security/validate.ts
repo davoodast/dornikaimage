@@ -57,6 +57,7 @@ export const settingsSchema = z
     footer_text: z.string().min(1).max(200).optional(),
     tool_enabled: z.boolean().optional(),
     tool_disabled_message: z.string().min(1).max(500).optional(),
+    log_enabled: z.boolean().optional(),
   })
   .strict(); // reject unknown keys (OWASP A04 — no mass assignment)
 

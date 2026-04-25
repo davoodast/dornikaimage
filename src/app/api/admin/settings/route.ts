@@ -65,5 +65,9 @@ export async function PATCH(request: NextRequest) {
     upsertSetting('tool_enabled', parsed.data.tool_enabled ? '1' : '0');
   }
 
+  if (parsed.data.log_enabled !== undefined) {
+    upsertSetting('log_enabled', parsed.data.log_enabled ? '1' : '0');
+  }
+
   return NextResponse.json(getAllSettings());
 }
