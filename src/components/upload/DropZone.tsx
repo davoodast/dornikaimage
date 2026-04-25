@@ -1,6 +1,7 @@
 'use client';
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
+import type { FileRejection } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface DropZoneProps {
@@ -33,6 +34,14 @@ export default function DropZone({
 }: DropZoneProps) {
   // Cache object URLs so we don't re-create on every render
   const urlCache = useRef<Map<string, string>>(new Map());
+  const [dropError, setDropError] = useState<string>('');
+  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showDropError(msg: string) {
+    setDropError(msg);
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+    errorTimerRef.current = setTimeout(() => setDropError(''), 5000);
+  }
 
   const getPreviewUrl = useCallback((file: File): string => {
     const key = `${file.name}-${file.size}-${file.lastModified}`;
@@ -46,19 +55,40 @@ export default function DropZone({
   useEffect(() => {
     return () => {
       urlCache.current.forEach((url) => URL.revokeObjectURL(url));
+      if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
     };
   }, []);
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
       const merged = [...files, ...acceptedFiles].slice(0, maxFiles);
+      if (files.length + acceptedFiles.length > maxFiles) {
+        showDropError(`حداکثر ${maxFiles} فایل مجاز است`);
+      }
       onFilesChange(merged);
     },
     [files, onFilesChange, maxFiles],
   );
 
+  const onDropRejected = useCallback(
+    (rejections: FileRejection[]) => {
+      const codes = new Set(rejections.flatMap((r) => r.errors.map((e) => e.code)));
+      if (codes.has('file-too-large')) {
+        showDropError(`یک یا چند فایل بزرگ‌تر از حد مجاز (${maxSizeMB} MB) است`);
+      } else if (codes.has('too-many-files')) {
+        showDropError(`حداکثر ${maxFiles} فایل در هر بار مجاز است`);
+      } else if (codes.has('file-invalid-type')) {
+        showDropError('فرمت فایل پشتیبانی نمی‌شود (JPEG, PNG, WebP, AVIF, GIF)');
+      } else {
+        showDropError('یک یا چند فایل قابل پذیرش نیستند');
+      }
+    },
+    [maxSizeMB, maxFiles],
+  );
+
   const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
+    onDropRejected,
     accept: ACCEPTED_TYPES,
     maxFiles,
     maxSize: maxSizeMB * 1024 * 1024,
@@ -77,8 +107,9 @@ export default function DropZone({
   const clearAll = useCallback(() => onFilesChange([]), [onFilesChange]);
 
   return (
-    <div
-      {...getRootProps()}
+    <>
+      <div
+        {...getRootProps()}
       className={[
         'relative w-full rounded-2xl border-2 border-dashed transition-all duration-200 outline-none select-none',
         disabled
@@ -235,5 +266,26 @@ export default function DropZone({
         )}
       </AnimatePresence>
     </div>
+
+    {/* Error banner — shown below the drop zone, fades in/out */}
+    <AnimatePresence>
+      {dropError && (
+        <motion.div
+          key="drop-error"
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={{ duration: 0.2 }}
+          className="mt-2 flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2.5"
+          dir="rtl"
+        >
+          <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4 text-red-400 shrink-0">
+            <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span className="text-red-400 text-sm">{dropError}</span>
+        </motion.div>
+      )}
+    </AnimatePresence>
+    </>
   );
 }

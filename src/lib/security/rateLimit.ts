@@ -61,5 +61,13 @@ const apiWindow = Number(process.env.RATE_LIMIT_WINDOW_MS) || 60_000;
 export const apiRateLimiter = new SlidingWindowRateLimiter(apiMax, apiWindow);
 export const adminRateLimiter = new SlidingWindowRateLimiter(20, 60_000);
 export const loginRateLimiter = new SlidingWindowRateLimiter(5, 15 * 60_000);
-// Configurable upload rate limiter — reconfigured when admin changes settings
-export const uploadRateLimiter = new SlidingWindowRateLimiter(apiMax, apiWindow);
+
+// Upload rate limiter stored on globalThis so it's truly a singleton across all route
+// chunks in Next.js dev mode (where each route bundle evaluates modules independently).
+// Without this, admin/settings/route.ts reconfigures a DIFFERENT instance than
+// the one checked in upload/route.ts.
+const grl = globalThis as typeof globalThis & { __uploadRateLimiter?: SlidingWindowRateLimiter };
+if (!grl.__uploadRateLimiter) {
+  grl.__uploadRateLimiter = new SlidingWindowRateLimiter(apiMax, apiWindow);
+}
+export const uploadRateLimiter = grl.__uploadRateLimiter;

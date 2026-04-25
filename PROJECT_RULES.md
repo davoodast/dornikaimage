@@ -72,6 +72,7 @@ dornikaimage/
 │   │           ├── settings/route.ts   # GET+PATCH: admin settings (JWT-gated)
 │           ├── change-password/route.ts # POST: change admin password (JWT-gated)
 │           ├── stats/route.ts      # GET: chart stats (JWT-gated)
+│           ├── disk-usage/route.ts # GET: uploads+compressed disk usage (JWT-gated)
 │           └── logo/route.ts       # POST: upload new logo (magic bytes validated)
 │       └── public/
 │           └── settings/route.ts   # GET: public content settings (no auth)

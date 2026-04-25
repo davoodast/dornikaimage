@@ -18,6 +18,14 @@ import type { ChartStats } from '@/lib/db/client';
 
 type Tab = 'hourly' | 'daily' | 'weekly' | 'monthly';
 
+interface DiskUsage {
+  uploadsMB: number;
+  compressedMB: number;
+  totalMB: number;
+  uploadSessions: number;
+  compressedSessions: number;
+}
+
 const DEVICE_COLORS = ['#14b8a6', '#6366f1', '#f59e0b', '#94a3b8'];
 const BROWSER_COLORS = ['#14b8a6', '#6366f1', '#f59e0b', '#f87171', '#a78bfa', '#34d399'];
 
@@ -76,6 +84,8 @@ export default function DashboardCharts() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('hourly');
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [diskUsage, setDiskUsage] = useState<DiskUsage | null>(null);
+  const [diskLoading, setDiskLoading] = useState(false);
 
   const fetchStats = useCallback(async () => {
     setLoading(true);
@@ -90,7 +100,21 @@ export default function DashboardCharts() {
     }
   }, []);
 
+  const fetchDiskUsage = useCallback(async () => {
+    setDiskLoading(true);
+    try {
+      const res = await fetch('/api/admin/disk-usage');
+      if (!res.ok) throw new Error('err');
+      setDiskUsage(await res.json() as DiskUsage);
+    } catch {
+      // silent
+    } finally {
+      setDiskLoading(false);
+    }
+  }, []);
+
   useEffect(() => { fetchStats(); }, [fetchStats]);
+  useEffect(() => { if (showBreakdown) fetchDiskUsage(); }, [showBreakdown, fetchDiskUsage]);
 
   type TabData = Array<{ [key: string]: string | number }>;
   const tabMap: Record<Tab, { data: TabData; xKey: string; xFmt?: (v: string) => string; xLabel: string }> = {
@@ -268,7 +292,7 @@ export default function DashboardCharts() {
               transition={{ duration: 0.25 }}
               className="overflow-hidden"
             >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
                 {[
                   { title: 'نوع دستگاه', data: stats?.deviceBreakdown ?? [], colors: DEVICE_COLORS },
                   { title: 'مرورگرها',   data: stats?.browserBreakdown ?? [], colors: BROWSER_COLORS },
@@ -318,6 +342,74 @@ export default function DashboardCharts() {
                     </div>
                   </div>
                 ))}
+
+                {/* Disk usage card */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                  <div className="px-5 py-3 border-b border-slate-800 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-slate-100">{'فضای اشغالی تصاویر'}</h3>
+                    <button
+                      onClick={fetchDiskUsage}
+                      disabled={diskLoading}
+                      className="text-slate-500 hover:text-teal-400 transition-colors disabled:opacity-40"
+                      title="به‌روزرسانی"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" className={`w-3.5 h-3.5 ${diskLoading ? 'animate-spin' : ''}`}>
+                        <path d="M4 4v5h5M20 20v-5h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M4 9a8 8 0 0 1 14.93-2.69M20 15a8 8 0 0 1-14.93 2.69" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="px-5 py-4 space-y-4">
+                    {diskLoading ? (
+                      <>
+                        <Skel cls="h-6 w-28 mb-1" />
+                        <Skel cls="h-2 w-full" />
+                        <Skel cls="h-2 w-3/4" />
+                      </>
+                    ) : diskUsage ? (
+                      <>
+                        <div>
+                          <div className="text-2xl font-bold tabular-nums text-teal-400">
+                            {diskUsage.totalMB} MB
+                          </div>
+                          <div className="text-xs text-slate-500 mt-0.5">{'مجموع فضای اشغالی'}</div>
+                        </div>
+
+                        {/* Uploads bar */}
+                        <div>
+                          <div className="flex justify-between text-xs mb-1.5">
+                            <span className="text-slate-400">{'آپلودهای اصلی'}</span>
+                            <span className="text-indigo-400 font-mono">{diskUsage.uploadsMB} MB</span>
+                          </div>
+                          <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-indigo-500 rounded-full transition-all duration-500"
+                              style={{ width: diskUsage.totalMB > 0 ? `${Math.min(100, (diskUsage.uploadsMB / diskUsage.totalMB) * 100)}%` : '0%' }}
+                            />
+                          </div>
+                          <div className="text-xs text-slate-600 mt-1">{diskUsage.uploadSessions} {' پوشه جلسه'}</div>
+                        </div>
+
+                        {/* Compressed bar */}
+                        <div>
+                          <div className="flex justify-between text-xs mb-1.5">
+                            <span className="text-slate-400">{'خروجی فشرده‌شده'}</span>
+                            <span className="text-teal-400 font-mono">{diskUsage.compressedMB} MB</span>
+                          </div>
+                          <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-teal-500 rounded-full transition-all duration-500"
+                              style={{ width: diskUsage.totalMB > 0 ? `${Math.min(100, (diskUsage.compressedMB / diskUsage.totalMB) * 100)}%` : '0%' }}
+                            />
+                          </div>
+                          <div className="text-xs text-slate-600 mt-1">{diskUsage.compressedSessions} {' پوشه جلسه'}</div>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-slate-500 text-sm text-center py-6">{'داده‌ای وجود ندارد'}</p>
+                    )}
+                  </div>
+                </div>
               </div>
             </motion.div>
           )}

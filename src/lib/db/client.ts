@@ -17,15 +17,17 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-// Singleton
-let _db: DatabaseSync | null = null;
+// Global singleton — survives Next.js dev-mode hot reloads and cross-chunk module re-evaluation.
+// Without this, each route bundle gets a separate module instance and a separate _db reference,
+// meaning getSetting() in upload/route.ts might read a stale or different connection.
+const g = globalThis as typeof globalThis & { __dornikaDb?: DatabaseSync };
 
 function getDb(): DatabaseSync {
-  if (!_db) {
-    _db = new DatabaseSync(DB_PATH);
-    initDb(_db);
+  if (!g.__dornikaDb) {
+    g.__dornikaDb = new DatabaseSync(DB_PATH);
+    initDb(g.__dornikaDb);
   }
-  return _db;
+  return g.__dornikaDb;
 }
 
 function initDb(db: DatabaseSync): void {
