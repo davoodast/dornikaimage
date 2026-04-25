@@ -1,6 +1,7 @@
 'use client';
 import { motion, AnimatePresence } from 'framer-motion';
 import ProgressCard from './ProgressCard';
+import DownloadButton from './DownloadButton';
 import type { ProgressJob } from '@/lib/hooks/useProgress';
 
 interface ImageGridProps {
@@ -10,6 +11,7 @@ interface ImageGridProps {
   allDone: boolean;
   totalSavedBytes: number;
   totalSavingsPercent: number;
+  expired?: boolean;
 }
 
 function formatBytes(bytes: number): string {
@@ -24,6 +26,7 @@ export default function ImageGrid({
   allDone,
   totalSavedBytes,
   totalSavingsPercent,
+  expired = false,
 }: ImageGridProps) {
   const jobList = Array.from(jobs.values());
   if (jobList.length === 0) return null;
@@ -90,19 +93,14 @@ export default function ImageGrid({
                 </p>
               )}
             </div>
-            <motion.a
-              href={`/api/download/batch?sessionId=${sessionId}`}
-              download
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              className="flex items-center gap-2 bg-teal-600 hover:bg-teal-500 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors text-sm shrink-0"
-            >
-              <svg viewBox="0 0 20 20" fill="none" className="w-4 h-4">
-                <path d="M10 3v10m0 0-3-3m3 3 3-3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M3 16h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              </svg>
-              دانلود همه (ZIP)
-            </motion.a>
+            <DownloadButton
+              url={`/api/download/batch?sessionId=${sessionId}`}
+              filename={`dornika-compressed-${sessionId.slice(0, 8)}.zip`}
+              label="دانلود همه (ZIP)"
+              variant="secondary"
+              disabled={expired}
+              className="!w-auto px-5 py-2.5 !text-sm !rounded-xl shrink-0"
+            />
           </motion.div>
         )}
       </AnimatePresence>
@@ -121,6 +119,7 @@ export default function ImageGrid({
               job={job}
               sessionId={sessionId}
               thumbnailUrl={thumbnails.get(job.jobId)}
+              expired={expired}
             />
           ))}
         </AnimatePresence>

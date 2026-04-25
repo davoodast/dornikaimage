@@ -1,11 +1,13 @@
 'use client';
 import { motion } from 'framer-motion';
 import type { ProgressJob } from '@/lib/hooks/useProgress';
+import DownloadButton from './DownloadButton';
 
 interface ProgressCardProps {
   job: ProgressJob;
   sessionId: string;
   thumbnailUrl?: string;
+  expired?: boolean;
 }
 
 function formatBytes(bytes: number): string {
@@ -14,7 +16,7 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function ProgressCard({ job, sessionId, thumbnailUrl }: ProgressCardProps) {
+export default function ProgressCard({ job, sessionId, thumbnailUrl, expired = false }: ProgressCardProps) {
   const isDone = job.status === 'done';
   const isError = job.status === 'error';
   const isProcessing = job.status === 'processing';
@@ -110,19 +112,15 @@ export default function ProgressCard({ job, sessionId, thumbnailUrl }: ProgressC
 
         {/* Download button */}
         {isDone && (
-          <motion.a
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            href={`/api/download?sessionId=${sessionId}&jobId=${job.jobId}`}
-            download={job.filename}
-            className="flex items-center justify-center gap-1.5 w-full text-xs bg-teal-600/80 hover:bg-teal-500 text-white py-1.5 rounded-lg transition-colors font-medium"
-          >
-            <svg viewBox="0 0 16 16" fill="none" className="w-3 h-3">
-              <path d="M8 2v8m0 0-3-3m3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M2 13h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-            دانلود
-          </motion.a>
+          <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}>
+            <DownloadButton
+              url={`/api/download?sessionId=${sessionId}&jobId=${job.jobId}`}
+              filename={job.filename}
+              label="دانلود"
+              variant="primary"
+              disabled={expired}
+            />
+          </motion.div>
         )}
       </div>
     </motion.div>

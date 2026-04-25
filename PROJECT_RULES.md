@@ -77,7 +77,9 @@ dornikaimage/
 │   │   ├── upload/
 │   │   │   ├── DropZone.tsx            # Drag-and-drop area (react-dropzone + framer-motion)
 │   │   │   ├── ImageGrid.tsx           # Uploaded images preview grid (staggered animation)
-│   │   │   └── ProgressCard.tsx        # Per-file status card (queued/processing/done/error)
+│   │   │   ├── ProgressCard.tsx        # Per-file status card (queued/processing/done/error)
+│   │   │   ├── CompressionAnimation.tsx # 5×5 mosaic tile scatter animation (framer-motion)
+│   │   │   └── DownloadButton.tsx      # In-page download with ReadableStream progress
 │   │   ├── admin/
 │   │   │   ├── LogsTable.tsx           # Paginated logs viewer + CSV export + stats bar
 │   │   │   ├── SettingsForm.tsx        # Settings form with slider + logo upload + toast

@@ -21,7 +21,7 @@
 | 8 | PWA Setup | ✅ تکمیل | 1404/02/06 |
 | 9 | Final Audit + README | ✅ تکمیل | 1404/02/06 |
 | 10 | Extended Settings & Admin Content Management | ✅ تکمیل | 1404/02/05 |
-| 11 | Main Page UI Upgrades | ⏳ در انتظار | — |
+| 11 | Main Page UI Upgrades | ✅ تکمیل | 1404/02/05 |
 | 12 | Admin Analytics & Enhanced Logging | ⏳ در انتظار | — |
 
 ---
@@ -1294,7 +1294,7 @@ Mark Phase 10 as ✅ تکمیل with date 1404/02/05.
 
 ## فاز ۱۱ — Main Page UI Upgrades
 
-**وضعیت:** ⏳ در انتظار  
+**وضعیت:** ✅ تکمیل  
 **پیش‌نیاز:** فاز ۱۰ تکمیل  
 **فایل‌های خروجی:**
 - `src/app/page.tsx` — حذف ادمین link، about us، انیمیشن، skeleton، timer، tool_disabled
