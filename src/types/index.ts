@@ -1,4 +1,5 @@
 export type JobStatus = 'queued' | 'processing' | 'done' | 'error';
+export type CompressionLevel = 'balanced' | 'high_compression' | 'high_quality';
 
 export interface CompressionJob {
   jobId: string;
@@ -8,6 +9,7 @@ export interface CompressionJob {
   outputPath: string;
   format: string;
   status: JobStatus;
+  compressionLevel?: CompressionLevel;
   originalSize?: number;
   compressedSize?: number;
   error?: string;
@@ -16,6 +18,8 @@ export interface CompressionJob {
 export interface CompressionResult {
   jobId: string;
   filename: string;
+  /** Actual output filename — may differ when converting to WebP */
+  outputFilename: string;
   originalSize: number;
   compressedSize: number;
   savingsPercent: number;

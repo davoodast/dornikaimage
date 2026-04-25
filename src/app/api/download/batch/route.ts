@@ -35,11 +35,24 @@ export async function GET(req: NextRequest): Promise<Response> {
   const archive = archiver('zip', { zlib: { level: 0 } }); // no re-compression
 
   for (const job of jobs) {
-    const filePath = path.join(sessionDir, `${job.jobId}_${job.filename}`);
+    let filePath = path.join(sessionDir, `${job.jobId}_${job.filename}`);
     try {
       assertPathWithin(filePath, COMPRESSED_DIR);
     } catch {
-      continue; // skip unsafe paths silently (should never happen)
+      continue;
+    }
+    // Fallback: scan directory for file starting with jobId_ if exact path not found
+    if (!fs.existsSync(filePath) && fs.existsSync(sessionDir)) {
+      const found = fs.readdirSync(sessionDir).find((f) => f.startsWith(`${job.jobId}_`));
+      if (found) {
+        const candidate = path.join(sessionDir, found);
+        try {
+          assertPathWithin(candidate, COMPRESSED_DIR);
+          filePath = candidate;
+        } catch {
+          continue;
+        }
+      }
     }
     if (fs.existsSync(filePath)) {
       archive.file(filePath, { name: job.filename });

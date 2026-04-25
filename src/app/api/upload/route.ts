@@ -1,9 +1,4 @@
-﻿/**
- * POST /api/upload
- * Accepts multipart/form-data with one or more image files.
- * Validates magic bytes, sanitizes filenames, saves to uploads/, enqueues compression.
- */
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
@@ -12,7 +7,9 @@ import { ALLOWED_MIME_TYPES } from '@/lib/security/validate';
 import { getCompressionQueue } from '@/lib/compression/queue';
 import { insertLog, hashValue } from '@/lib/db/client';
 import { logUpload, logValidationFailure } from '@/lib/logger/winston';
-import type { CompressionJob } from '@/types';
+import type { CompressionJob, CompressionLevel } from '@/types';
+
+const VALID_COMPRESSION_LEVELS: CompressionLevel[] = ['balanced', 'high_compression', 'high_quality'];
 
 const MAX_FILE_SIZE = () => (Number(process.env.MAX_FILE_SIZE_MB) || 20) * 1024 * 1024;
 const MAX_FILES = () => Number(process.env.MAX_FILES_PER_UPLOAD) || 50;
@@ -35,6 +32,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (files.length > MAX_FILES()) {
     return NextResponse.json({ error: `حداکثر ${MAX_FILES()} فایل مجاز است` }, { status: 400 });
   }
+
+  // Read and validate compressionLevel (OWASP A03: whitelist validation)
+  const rawLevel = formData.get('compressionLevel');
+  const compressionLevel: CompressionLevel =
+    typeof rawLevel === 'string' && VALID_COMPRESSION_LEVELS.includes(rawLevel as CompressionLevel)
+      ? (rawLevel as CompressionLevel)
+      : 'balanced';
 
   const sessionId = uuidv4();
   const sessionUploadDir = path.join(UPLOADS_DIR, sessionId);
@@ -83,6 +87,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       outputPath,
       format: detectedFormat,
       status: 'queued',
+      compressionLevel,
     };
 
     queue.enqueue(job).catch(() => { /* errors tracked in sessionProgress */ });

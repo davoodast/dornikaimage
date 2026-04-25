@@ -60,6 +60,7 @@ class CompressionQueue extends EventEmitter {
           format: job.format,
           uploadsDir: UPLOADS_DIR,
           compressedDir: COMPRESSED_DIR,
+          compressionLevel: job.compressionLevel ?? 'balanced',
         },
       });
     } catch (err) {
@@ -162,10 +163,15 @@ class CompressionQueue extends EventEmitter {
     const sessionMap = this.sessionProgress.get(job.sessionId);
     if (!sessionMap) return;
 
+    // When converting to WebP the output filename differs from the input filename.
+    // Use the result's outputFilename (if available) so download route can reconstruct
+    // the correct file path.
+    const filename = result?.outputFilename ?? job.filename;
+
     const progress: JobProgress = {
       jobId: job.jobId,
       sessionId: job.sessionId,
-      filename: job.filename,
+      filename,
       status,
       ...(result && {
         originalSize: result.originalSize,
@@ -198,10 +204,18 @@ class CompressionQueue extends EventEmitter {
   }
 }
 
-// Global singleton — one pool per process
-let _queue: CompressionQueue | null = null;
+// Global singleton — survive Next.js HMR module reloads in dev mode by storing on globalThis.
+// In production this is a plain module-level singleton.
+const GLOBAL_KEY = '__dornikaimage_compression_queue__';
+declare global {
+  // eslint-disable-next-line no-var
+  var __dornikaimage_compression_queue__: CompressionQueue | undefined;
+}
+
 export function getCompressionQueue(): CompressionQueue {
-  if (!_queue) _queue = new CompressionQueue();
-  return _queue;
+  if (!globalThis[GLOBAL_KEY]) {
+    globalThis[GLOBAL_KEY] = new CompressionQueue();
+  }
+  return globalThis[GLOBAL_KEY]!;
 }
 

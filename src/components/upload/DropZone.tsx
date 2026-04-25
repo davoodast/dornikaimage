@@ -1,17 +1,12 @@
 ﻿'use client';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
 
-type UploadState = 'idle' | 'dragging' | 'uploading' | 'error';
-
-interface UploadedJob {
-  jobId: string;
-  filename: string;
-}
-
 interface DropZoneProps {
-  onUploadComplete: (sessionId: string, jobs: UploadedJob[], files: File[]) => void;
+  files: File[];
+  onFilesChange: (files: File[]) => void;
+  disabled?: boolean;
   maxFiles?: number;
   maxSizeMB?: number;
 }
@@ -24,151 +19,220 @@ const ACCEPTED_TYPES = {
   'image/gif': ['.gif'],
 };
 
-const FORMAT_BADGES = ['JPEG', 'PNG', 'WebP', 'AVIF', 'GIF'];
-
 function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function DropZone({ onUploadComplete, maxFiles = 50, maxSizeMB = 20 }: DropZoneProps) {
-  const [state, setState] = useState<UploadState>('idle');
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [errorMsg, setErrorMsg] = useState('');
+export default function DropZone({
+  files,
+  onFilesChange,
+  disabled = false,
+  maxFiles = 50,
+  maxSizeMB = 20,
+}: DropZoneProps) {
+  // Cache object URLs so we don't re-create on every render
+  const urlCache = useRef<Map<string, string>>(new Map());
+
+  const getPreviewUrl = useCallback((file: File): string => {
+    const key = `${file.name}-${file.size}-${file.lastModified}`;
+    if (!urlCache.current.has(key)) {
+      urlCache.current.set(key, URL.createObjectURL(file));
+    }
+    return urlCache.current.get(key)!;
+  }, []);
+
+  // Revoke all cached URLs on unmount
+  useEffect(() => {
+    return () => {
+      urlCache.current.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, []);
 
   const onDrop = useCallback(
-    async (acceptedFiles: File[]) => {
-      if (acceptedFiles.length === 0) return;
-      setState('uploading');
-      setUploadProgress(10);
-      setErrorMsg('');
-
-      const formData = new FormData();
-      for (const file of acceptedFiles) {
-        formData.append('files', file);
-      }
-
-      try {
-        setUploadProgress(40);
-        const res = await fetch('/api/upload', { method: 'POST', body: formData });
-        setUploadProgress(80);
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({ error: 'خطای ناشناخته' }));
-          throw new Error(body.error ?? 'آپلود ناموفق');
-        }
-        const data = await res.json();
-        setUploadProgress(100);
-        onUploadComplete(data.sessionId, data.jobs, acceptedFiles);
-        setState('idle');
-        setUploadProgress(0);
-      } catch (e: unknown) {
-        setState('error');
-        setErrorMsg(e instanceof Error ? e.message : 'خطا در آپلود');
-        setUploadProgress(0);
-      }
+    (acceptedFiles: File[]) => {
+      const merged = [...files, ...acceptedFiles].slice(0, maxFiles);
+      onFilesChange(merged);
     },
-    [onUploadComplete],
+    [files, onFilesChange, maxFiles],
   );
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
     accept: ACCEPTED_TYPES,
     maxFiles,
     maxSize: maxSizeMB * 1024 * 1024,
-    disabled: state === 'uploading',
-    onDragEnter: () => setState('dragging'),
-    onDragLeave: () => setState((s) => (s === 'dragging' ? 'idle' : s)),
+    disabled,
+    noClick: files.length > 0,
+    multiple: true,
   });
 
-  const displayState = isDragActive ? 'dragging' : state;
+  const removeFile = useCallback(
+    (idx: number) => {
+      onFilesChange(files.filter((_, i) => i !== idx));
+    },
+    [files, onFilesChange],
+  );
+
+  const clearAll = useCallback(() => onFilesChange([]), [onFilesChange]);
 
   return (
     <div
       {...getRootProps()}
-      className="relative w-full cursor-pointer select-none outline-none"
+      className={[
+        'relative w-full rounded-2xl border-2 border-dashed transition-all duration-200 outline-none select-none',
+        disabled
+          ? 'border-slate-700 bg-slate-900/40 cursor-not-allowed opacity-60'
+          : isDragActive
+            ? 'border-teal-400 bg-teal-950/20 shadow-[0_0_40px_rgba(20,184,166,0.12)] cursor-copy'
+            : files.length > 0
+              ? 'border-slate-700/60 bg-slate-900/60 cursor-default'
+              : 'border-slate-700 bg-slate-900 hover:border-teal-600/50 hover:bg-slate-800/40 cursor-pointer',
+      ].join(' ')}
       aria-label="ناحیه آپلود تصویر"
     >
       <input {...getInputProps()} />
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={displayState}
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.98 }}
-          transition={{ duration: 0.15 }}
-          className={[
-            'rounded-2xl border-2 border-dashed p-10 md:p-16 text-center transition-all',
-            displayState === 'dragging'
-              ? 'border-teal-400 bg-teal-950/30 shadow-[0_0_40px_0_rgba(20,184,166,0.15)] scale-[1.02]'
-              : displayState === 'uploading'
-                ? 'border-slate-600 bg-slate-900'
-                : displayState === 'error'
-                  ? 'border-red-500/60 bg-red-950/20'
-                  : 'border-slate-700 bg-slate-900 hover:border-teal-600/60 hover:bg-slate-800/50',
-          ].join(' ')}
-        >
-          {/* Icon */}
-          <div className="flex justify-center mb-4">
-            {displayState === 'uploading' ? (
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-                className="w-12 h-12"
-              >
-                <svg viewBox="0 0 24 24" fill="none" className="w-12 h-12 text-teal-400">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" strokeOpacity="0.2" />
-                  <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-              </motion.div>
-            ) : displayState === 'error' ? (
-              <svg viewBox="0 0 24 24" fill="none" className="w-12 h-12 text-red-400">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
-                <path d="M12 8v4m0 4h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            ) : (
-              <svg viewBox="0 0 24 24" fill="none" className={`w-12 h-12 ${displayState === 'dragging' ? 'text-teal-400' : 'text-slate-500'}`}>
-                <path d="M12 16V4m0 0-4 4m4-4 4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M4 20h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            )}
-          </div>
 
-          {/* Text */}
-          {displayState === 'uploading' ? (
-            <>
-              <p className="text-slate-300 text-lg font-medium mb-3">در حال آپلود...</p>
-              <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+      <AnimatePresence mode="wait" initial={false}>
+        {files.length === 0 ? (
+          /* ── Empty state ── */
+          <motion.div
+            key="empty"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, scale: 0.97 }}
+            transition={{ duration: 0.18 }}
+            className="flex flex-col items-center justify-center py-16 px-6 text-center"
+          >
+            <motion.div
+              animate={isDragActive ? { scale: 1.15, rotate: -5 } : { scale: 1, rotate: 0 }}
+              transition={{ type: 'spring', stiffness: 300 }}
+              className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-5 ${
+                isDragActive ? 'bg-teal-500/20' : 'bg-slate-800'
+              }`}
+            >
+              <svg viewBox="0 0 24 24" fill="none" className={`w-8 h-8 ${isDragActive ? 'text-teal-400' : 'text-slate-500'}`}>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M17 8l-5-5-5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M12 3v12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            </motion.div>
+
+            <p className={`text-lg font-semibold mb-1.5 ${isDragActive ? 'text-teal-300' : 'text-slate-200'}`}>
+              {isDragActive ? 'رها کنید!' : 'تصاویر را اینجا بکشید'}
+            </p>
+            <p className="text-slate-500 text-sm mb-6">یا برای انتخاب از دیسک کلیک کنید</p>
+
+            <div className="flex flex-wrap justify-center gap-2">
+              {['JPEG', 'PNG', 'WebP', 'AVIF', 'GIF'].map((fmt) => (
+                <span
+                  key={fmt}
+                  className="px-2.5 py-1 rounded-md bg-slate-800 text-slate-400 text-xs font-mono border border-slate-700/60"
+                >
+                  {fmt}
+                </span>
+              ))}
+            </div>
+            <p className="text-slate-600 text-xs mt-4">
+              حداکثر {maxFiles} فایل — هر فایل تا {maxSizeMB}MB
+            </p>
+          </motion.div>
+        ) : (
+          /* ── Preview grid ── */
+          <motion.div
+            key="preview"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="p-4"
+          >
+            {/* Drag-over overlay */}
+            <AnimatePresence>
+              {isDragActive && (
                 <motion.div
-                  className="h-full bg-teal-500 rounded-full"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${uploadProgress}%` }}
-                  transition={{ duration: 0.3 }}
-                />
-              </div>
-            </>
-          ) : displayState === 'error' ? (
-            <>
-              <p className="text-red-400 text-lg font-medium mb-2">{errorMsg}</p>
-              <p className="text-slate-500 text-sm">برای تلاش مجدد کلیک کنید</p>
-            </>
-          ) : (
-            <>
-              <p className={`text-lg font-medium mb-2 ${displayState === 'dragging' ? 'text-teal-300' : 'text-slate-200'}`}>
-                {displayState === 'dragging' ? 'رها کنید!' : 'تصاویر را اینجا رها کنید یا کلیک کنید'}
-              </p>
-              <p className="text-slate-500 text-sm mb-5">
-                حداکثر {maxFiles} فایل — هر فایل تا {maxSizeMB}MB
-              </p>
-              <div className="flex flex-wrap justify-center gap-2">
-                {FORMAT_BADGES.map((fmt) => (
-                  <span key={fmt} className="px-2.5 py-1 rounded-md bg-slate-800 text-slate-400 text-xs font-mono border border-slate-700">
-                    {fmt}
-                  </span>
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 rounded-2xl bg-teal-500/10 border-2 border-teal-400 z-10 flex items-center justify-center pointer-events-none"
+                >
+                  <p className="text-teal-300 font-semibold text-lg">افزودن تصاویر...</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Thumbnails */}
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+              <AnimatePresence>
+                {files.map((file, idx) => (
+                  <motion.div
+                    key={`${file.name}-${file.size}-${file.lastModified}`}
+                    layout
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ duration: 0.15 }}
+                    className="relative group rounded-xl overflow-hidden bg-slate-800 aspect-square"
+                  >
+                    <img
+                      src={getPreviewUrl(file)}
+                      alt={file.name}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-2">
+                      <p className="text-white text-[10px] truncate leading-tight font-medium">{file.name}</p>
+                      <p className="text-slate-300 text-[9px] mt-0.5">{formatBytes(file.size)}</p>
+                    </div>
+                    {!disabled && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); removeFile(idx); }}
+                        className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/90 text-sm leading-none"
+                        aria-label={`حذف ${file.name}`}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </motion.div>
                 ))}
-              </div>
-            </>
-          )}
-        </motion.div>
+              </AnimatePresence>
+
+              {/* Add more tile */}
+              {!disabled && files.length < maxFiles && (
+                <motion.button
+                  type="button"
+                  layout
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  onClick={(e) => { e.stopPropagation(); open(); }}
+                  className="rounded-xl border-2 border-dashed border-slate-700 aspect-square flex flex-col items-center justify-center hover:border-teal-600/60 hover:bg-teal-950/20 transition-colors"
+                  aria-label="افزودن تصاویر بیشتر"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6 text-slate-600">
+                    <path d="M12 5v14m-7-7h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                  <span className="text-slate-600 text-[10px] mt-1">افزودن</span>
+                </motion.button>
+              )}
+            </div>
+
+            {/* Footer row */}
+            <div className="flex items-center justify-between mt-3 px-1">
+              <span className="text-slate-500 text-sm">
+                {files.length} تصویر انتخاب شده
+              </span>
+              {!disabled && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); clearAll(); }}
+                  className="text-slate-600 hover:text-red-400 text-xs transition-colors"
+                >
+                  پاک کردن همه
+                </button>
+              )}
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   );

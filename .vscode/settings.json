@@ -17,6 +17,11 @@
         "Set-Content": true,
         "New-Item": true,
         "Out-Null": true,
-        "Test-Path": true
+        "Test-Path": true,
+        "ForEach-Object": true,
+        "/^node -e \"\nconst fs = require\\('fs'\\);\nconst bcrypt = require\\('bcryptjs'\\);\nconst env = fs\\.readFileSync\\('\\.env\\.local','utf8'\\);\nconst hashLine = env\\.split\\('\\\\n'\\)\\.find\\(l => l\\.startsWith\\('ADMIN_PASSWORD_HASH='\\)\\);\nconst hash = hashLine\\.split\\('='\\)\\.slice\\(1\\)\\.join\\('='\\);\nconsole\\.log\\('Hash from file:', JSON\\.stringify\\(hash\\)\\);\nbcrypt\\.compare\\('@tsconet1212', hash\\)\\.then\\(r => console\\.log\\('Match:', r\\)\\);\n\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }

@@ -1,3 +1,48 @@
+const withPWA = require('next-pwa')({
+  dest: 'public',
+  disable: process.env.NODE_ENV === 'development',
+  register: true,
+  skipWaiting: true,
+  // API routes must never be served from cache (OWASP: always fresh data)
+  runtimeCaching: [
+    {
+      urlPattern: /^\/api\/.*/i,
+      handler: 'NetworkOnly',
+    },
+    {
+      urlPattern: /^\/admin\/.*/i,
+      handler: 'NetworkOnly',
+    },
+    {
+      urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/i,
+      handler: 'CacheFirst',
+      options: {
+        cacheName: 'images',
+        expiration: { maxEntries: 50, maxAgeSeconds: 7 * 24 * 60 * 60 },
+      },
+    },
+    {
+      urlPattern: /\.(?:woff2?|ttf|otf|eot)$/i,
+      handler: 'CacheFirst',
+      options: {
+        cacheName: 'fonts',
+        expiration: { maxEntries: 10, maxAgeSeconds: 365 * 24 * 60 * 60 },
+      },
+    },
+    {
+      urlPattern: ({ request }) => request.destination === 'document',
+      handler: 'NetworkFirst',
+      options: {
+        cacheName: 'pages',
+        networkTimeoutSeconds: 10,
+      },
+    },
+  ],
+  fallbacks: {
+    document: '/offline',
+  },
+});
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
@@ -35,4 +80,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = withPWA(nextConfig);

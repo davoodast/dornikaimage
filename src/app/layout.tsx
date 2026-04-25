@@ -1,14 +1,15 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import InstallBanner from '@/components/pwa/InstallBanner';
 
 export const metadata: Metadata = {
-  title: 'DornikaImage — فشرده‌ساز تصویر',
-  description: 'فشرده‌سازی سریع تصاویر بدون افت کیفیت',
+  title: 'دستبار تصویر درنیکا وب',
+  description: 'فشرده‌سازی هوشمند تصاویر بدون افت کیفیت — Dornika Web Image Compressor',
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'DornikaImage',
+    title: 'درنیکا وب',
   },
 };
 
@@ -28,7 +29,10 @@ export default function RootLayout({
       <head>
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <InstallBanner />
+      </body>
     </html>
   );
 }

@@ -50,72 +50,79 @@
 dornikaimage/
 ├── src/
 │   ├── instrumentation.ts              # Next.js startup hook (cleanup scheduler init)
+│   ├── middleware.ts                   # Edge middleware: security headers, rate limiting, path traversal block
 │   ├── app/
 │   │   ├── page.tsx                    # Landing page (main UI)
-│   │   ├── layout.tsx                  # Root layout with meta/PWA tags
-│   │   ├── globals.css                 # Global styles + Tailwind directives
+│   │   ├── layout.tsx                  # Root layout with meta/PWA tags + InstallBanner
+│   │   ├── globals.css                 # Global styles + Tailwind directives + @font-face
 │   │   ├── offline/page.tsx            # PWA offline fallback
 │   │   ├── admin/
-│   │   │   ├── login/page.tsx          # Admin login form
-│   │   │   └── dashboard/page.tsx      # Admin dashboard (server component)
+│   │   │   ├── login/page.tsx          # Admin login form (client component)
+│   │   │   └── dashboard/page.tsx      # Admin dashboard (server component, JWT-gated)
 │   │   └── api/
-│   │       ├── upload/route.ts         # POST: receive + enqueue files
-│   │       ├── progress/route.ts       # GET SSE: stream job status
+│   │       ├── upload/route.ts         # POST: receive + validate + enqueue files
+│   │       ├── progress/route.ts       # GET SSE: stream job status per sessionId
 │   │       ├── download/route.ts       # GET: serve single compressed file
-│   │       ├── download/batch/route.ts # GET: serve ZIP of all session files
+│   │       ├── download/batch/route.ts # GET: serve ZIP of all session files (archiver)
 │   │       └── admin/
-│   │           ├── login/route.ts      # POST: verify credentials, set cookie
-│   │           ├── logs/route.ts       # GET: paginated logs from SQLite
-│   │           └── settings/route.ts   # GET+PATCH: admin settings
+│   │           ├── login/route.ts      # POST: bcrypt verify, sign JWT, set httpOnly cookie
+│   │           ├── logout/route.ts     # POST: clear admin_token cookie
+│   │           ├── logs/route.ts       # GET: paginated logs from SQLite (JWT-gated)
+│   │           ├── settings/route.ts   # GET+PATCH: admin settings (JWT-gated)
+│   │           └── logo/route.ts       # POST: upload new logo (magic bytes validated)
 │   ├── components/
 │   │   ├── upload/
-│   │   │   ├── DropZone.tsx            # Drag-and-drop area
-│   │   │   ├── ImageGrid.tsx           # Uploaded images preview grid
-│   │   │   └── ProgressCard.tsx        # Per-file status card
+│   │   │   ├── DropZone.tsx            # Drag-and-drop area (react-dropzone + framer-motion)
+│   │   │   ├── ImageGrid.tsx           # Uploaded images preview grid (staggered animation)
+│   │   │   └── ProgressCard.tsx        # Per-file status card (queued/processing/done/error)
 │   │   ├── admin/
-│   │   │   ├── LogsTable.tsx           # Paginated logs viewer + CSV export
-│   │   │   └── SettingsForm.tsx        # Settings form with logo upload
+│   │   │   ├── LogsTable.tsx           # Paginated logs viewer + CSV export + stats bar
+│   │   │   ├── SettingsForm.tsx        # Settings form with slider + logo upload + toast
+│   │   │   └── LogoutButton.tsx        # Client-side logout button (clears cookie)
 │   │   └── pwa/
-│   │       └── InstallBanner.tsx       # "Add to Home Screen" prompt
+│   │       └── InstallBanner.tsx       # "Add to Home Screen" prompt (30s delay, 7d dismiss)
 │   ├── lib/
 │   │   ├── compression/
-│   │   │   ├── worker.ts               # Worker Thread: Sharp processing
-│   │   │   └── queue.ts                # Worker Thread Pool + job queue
+│   │   │   ├── worker.ts               # Worker Thread: Sharp processing (strips EXIF)
+│   │   │   ├── worker.cjs              # Compiled CJS worker (used at runtime)
+│   │   │   └── queue.ts                # Worker Thread Pool (os.cpus().length) + job queue
 │   │   ├── db/
-│   │   │   └── client.ts               # node:sqlite singleton + typed queries
+│   │   │   └── client.ts               # SQLite singleton (node:sqlite) + typed queries
 │   │   ├── auth/
-│   │   │   └── jwt.ts                  # signToken / verifyToken via jose
+│   │   │   └── jwt.ts                  # signToken / verifyToken (jose, HS256, 8h)
 │   │   ├── security/
-│   │   │   ├── rateLimit.ts            # Sliding window in-memory rate limiter
-│   │   │   ├── validate.ts             # Zod schemas (upload, login, settings)
-│   │   │   └── fileValidator.ts        # Magic bytes validation + filename sanitize
+│   │   │   ├── rateLimit.ts            # Sliding window rate limiter (api/admin/login instances)
+│   │   │   ├── validate.ts             # Zod schemas (upload, login, settings, uuid)
+│   │   │   └── fileValidator.ts        # Magic bytes validation + filename sanitizer
 │   │   ├── logger/
-│   │   │   └── winston.ts              # Winston logger config
+│   │   │   └── winston.ts              # Winston logger (file + console in dev)
 │   │   ├── cleanup/
-│   │   │   └── scheduler.ts            # node-cron cleanup job
+│   │   │   └── scheduler.ts            # node-cron cleanup (every 30s)
 │   │   └── hooks/
-│   │       └── useProgress.ts          # React hook: SSE client for progress
+│   │       └── useProgress.ts          # React hook: SSE client for job progress
 │   └── types/
 │       └── index.ts                    # Shared TypeScript interfaces
 ├── public/
-│   ├── fonts/                          # Local fonts (no CDN): inter.var.woff2, vazirmatn-*.woff2
-│   ├── icons/                          # PWA icons (192x192, 512x512, maskable)
+│   ├── fonts/                          # Local fonts: vazirmatn-*.woff2, inter.var.woff2
+│   ├── icons/                          # PWA icons: icon-192.png, icon-512.png, icon-512-maskable.png
 │   ├── logo.png                        # App logo (replaceable via admin panel)
-│   └── manifest.webmanifest            # PWA manifest
+│   └── manifest.webmanifest            # PWA manifest (standalone, teal theme)
 ├── scripts/
-│   └── generate-password-hash.js       # CLI: bcrypt hash generator for admin pw
-├── uploads/                            # Temp uploaded files (gitignored)
-├── compressed/                         # Temp compressed output (gitignored)
-├── data/
-│   ├── logs.db                         # SQLite database (gitignored)
-│   └── app.log                         # Winston log file (gitignored)
-├── PROJECT_RULES.md                    # ← این فایل (attach در هر پرامپت)
+│   ├── generate-password-hash.js       # CLI: node scripts/generate-password-hash.js <pw>
+│   ├── generate-icons.js               # CLI: generate PWA icons using Sharp
+│   └── _write-env.js                   # Helper: writes .env.local with properly escaped bcrypt hash
+├── data/                               # Runtime data (gitignored)
+│   ├── logs.db                         # SQLite database (WAL mode)
+│   └── app.log                         # Winston log file (JSON, 10MB×5)
+├── uploads/                            # Temp uploaded files (gitignored, cleaned by scheduler)
+├── compressed/                         # Temp compressed output (gitignored, cleaned by scheduler)
+├── .env.local                          # Secret env vars (gitignored — never commit)
+├── .env.local.example                  # Template with all required keys (no real values)
+├── PROJECT_RULES.md                    # ← این فایل
 ├── PHASES.md                           # فازهای پروژه + وضعیت هر فاز
-├── .env.local.example                  # Template env vars (no real values)
-├── .gitignore
-├── next.config.ts
-├── tailwind.config.ts
-├── tsconfig.json
+├── next.config.js                      # Next.js config: standalone output + next-pwa + security headers
+├── tailwind.config.js                  # Tailwind: dark slate palette, teal accent
+├── tsconfig.json                       # TypeScript strict mode + @/* path alias
 └── package.json
 ```
 
@@ -145,16 +152,16 @@ dornikaimage/
 
 | # | مورد | وضعیت | توضیح |
 |---|---|---|---|
-| A01 | Access Control | ⏳ | Admin JWT، دسترسی فایل scope‌بندی شده به session |
-| A02 | Cryptographic | ⏳ | JWT_SECRET ≥32 کاراکتر enforce شده، IP هش SHA-256 |
-| A03 | Injection | ⏳ | همه queries پارامتریک (better-sqlite3 prepared statements) |
-| A04 | Insecure Design | ⏳ | محدودیت سایز و تعداد فایل، endpoint های بسته |
-| A05 | Misconfiguration | ⏳ | Security headers در middleware، بدون debug route |
-| A06 | Vulnerable Components | ⏳ | npm audit در phase آخر |
-| A07 | Auth Failures | ⏳ | Rate limit login، خطای generic، httpOnly cookie |
-| A08 | Software Integrity | ⏳ | Magic bytes validation برای هر فایل آپلودی |
-| A09 | Logging Failures | ⏳ | رویدادهای امنیتی لاگ، بدون داده حساس در لاگ |
-| A10 | SSRF | ⏳ | هیچ fetch به URL کاربر انجام نمی‌شود |
+| A01 | Access Control | ✅ | Admin JWT، دسترسی فایل scope‌بندی شده به session |
+| A02 | Cryptographic | ✅ | JWT_SECRET ≥32 کاراکتر enforce شده، IP هش SHA-256 |
+| A03 | Injection | ✅ | همه queries پارامتریک (node:sqlite prepared statements) |
+| A04 | Insecure Design | ✅ | محدودیت سایز و تعداد فایل، endpoint های بسته |
+| A05 | Misconfiguration | ✅ | Security headers در middleware، بدون debug route |
+| A06 | Vulnerable Components | ⏳ | npm audit در phase 9 |
+| A07 | Auth Failures | ✅ | Rate limit login (5/15min)، خطای generic، httpOnly cookie |
+| A08 | Software Integrity | ✅ | Magic bytes validation برای هر فایل آپلودی |
+| A09 | Logging | ✅ | رویدادهای امنیتی لاگ، IP هش شده، بدون داده حساس |
+| A10 | SSRF | ✅ | هیچ fetch به URL کاربر انجام نمی‌شود |
 
 ### Security Headers (باید در middleware باشند)
 ```
