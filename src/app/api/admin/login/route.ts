@@ -4,7 +4,7 @@ import { adminLoginSchema } from '@/lib/security/validate';
 import { signToken } from '@/lib/auth/jwt';
 import { loginRateLimiter } from '@/lib/security/rateLimit';
 import { logAdminLogin } from '@/lib/logger/winston';
-import { hashValue } from '@/lib/db/client';
+import { hashValue, getSetting } from '@/lib/db/client';
 
 export async function POST(request: NextRequest) {
   const ip =
@@ -37,7 +37,8 @@ export async function POST(request: NextRequest) {
   const { username, password } = parsed.data;
 
   const validUsername = process.env.ADMIN_USERNAME;
-  const passwordHash = process.env.ADMIN_PASSWORD_HASH;
+  // DB hash takes precedence — allows password change without redeploy (OWASP A07)
+  const passwordHash = getSetting('admin_password_hash') ?? process.env.ADMIN_PASSWORD_HASH;
 
   if (!validUsername || !passwordHash) {
     return NextResponse.json({ error: 'خطای پیکربندی سرور' }, { status: 500 });

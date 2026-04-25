@@ -33,16 +33,36 @@ export async function PATCH(request: NextRequest) {
   }
 
   // OWASP A04: only explicitly listed keys accepted (settingsSchema is .strict())
-  const allowedKeys = [
+  const numericKeys = [
     'cleanup_interval_ms',
     'max_file_size_mb',
     'max_files_per_upload',
   ] as const;
 
-  for (const key of allowedKeys) {
+  const stringKeys = [
+    'output_format',
+    'about_us_text',
+    'app_title',
+    'app_subtitle',
+    'app_formats_text',
+    'footer_text',
+    'tool_disabled_message',
+  ] as const;
+
+  for (const key of numericKeys) {
     if (parsed.data[key] !== undefined) {
       upsertSetting(key, String(parsed.data[key]));
     }
+  }
+
+  for (const key of stringKeys) {
+    if (parsed.data[key] !== undefined) {
+      upsertSetting(key, String(parsed.data[key]));
+    }
+  }
+
+  if (parsed.data.tool_enabled !== undefined) {
+    upsertSetting('tool_enabled', parsed.data.tool_enabled ? '1' : '0');
   }
 
   return NextResponse.json(getAllSettings());

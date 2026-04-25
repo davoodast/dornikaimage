@@ -69,7 +69,10 @@ dornikaimage/
 │   │           ├── logout/route.ts     # POST: clear admin_token cookie
 │   │           ├── logs/route.ts       # GET: paginated logs from SQLite (JWT-gated)
 │   │           ├── settings/route.ts   # GET+PATCH: admin settings (JWT-gated)
-│   │           └── logo/route.ts       # POST: upload new logo (magic bytes validated)
+│           ├── change-password/route.ts # POST: change admin password (JWT-gated)
+│           └── logo/route.ts       # POST: upload new logo (magic bytes validated)
+│       └── public/
+│           └── settings/route.ts   # GET: public content settings (no auth)
 │   ├── components/
 │   │   ├── upload/
 │   │   │   ├── DropZone.tsx            # Drag-and-drop area (react-dropzone + framer-motion)

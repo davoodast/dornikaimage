@@ -26,6 +26,14 @@ export default async function AdminDashboardPage() {
           </div>
           <div className="flex items-center gap-4">
             <span className="text-slate-400 text-sm hidden sm:block">{payload.username}</span>
+            <a
+              href="/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-slate-400 hover:text-teal-400 transition-colors border border-slate-700 hover:border-teal-600 rounded-lg px-3 py-1.5"
+            >
+              مشاهده سایت
+            </a>
             <LogoutButton />
           </div>
         </div>

@@ -62,6 +62,14 @@ function initDb(db: DatabaseSync): void {
     max_file_size_mb: '20',
     max_files_per_upload: '50',
     logo_path: '/logo.png',
+    output_format: 'both',
+    about_us_text: 'درنیکا وب — ارائه‌دهنده ابزارهای هوشمند وب',
+    app_title: 'دستبار تصویر درنیکا وب',
+    app_subtitle: 'فشرده‌سازی هوشمند تصویر بدون افت کیفیت',
+    app_formats_text: 'JPEG، PNG، WebP، AVIF و GIF — همه روی سرور و بدون نیاز به اینترنت',
+    footer_text: 'تمام حقوق متعلق به درنیکا وب است — Dornika Web 2026',
+    tool_enabled: '1',
+    tool_disabled_message: 'این سرویس در حال حاضر در دسترس نیست. لطفاً بعداً مراجعه کنید.',
   };
   const insert = db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)`);
   for (const [key, value] of Object.entries(defaults)) {
@@ -179,6 +187,14 @@ export function getAllSettings(): AdminSettings {
     max_file_size_mb: Number(map.max_file_size_mb ?? 20),
     max_files_per_upload: Number(map.max_files_per_upload ?? 50),
     logo_path: map.logo_path ?? '/logo.png',
+    output_format: (map.output_format ?? 'both') as 'webp' | 'jpeg' | 'both',
+    about_us_text: map.about_us_text ?? 'درنیکا وب — ارائه‌دهنده ابزارهای هوشمند وب',
+    app_title: map.app_title ?? 'دستبار تصویر درنیکا وب',
+    app_subtitle: map.app_subtitle ?? 'فشرده‌سازی هوشمند تصویر بدون افت کیفیت',
+    app_formats_text: map.app_formats_text ?? 'JPEG، PNG، WebP، AVIF و GIF — همه روی سرور و بدون نیاز به اینترنت',
+    footer_text: map.footer_text ?? 'تمام حقوق متعلق به درنیکا وب است — Dornika Web 2026',
+    tool_enabled: (map.tool_enabled ?? '1') === '1',
+    tool_disabled_message: map.tool_disabled_message ?? 'این سرویس در حال حاضر در دسترس نیست. لطفاً بعداً مراجعه کنید.',
   };
 }
 

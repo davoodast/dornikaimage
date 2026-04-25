@@ -50,6 +50,14 @@ export interface AdminSettings {
   max_file_size_mb: number;
   max_files_per_upload: number;
   logo_path: string;
+  output_format: 'webp' | 'jpeg' | 'both';
+  about_us_text: string;
+  app_title: string;
+  app_subtitle: string;
+  app_formats_text: string;
+  footer_text: string;
+  tool_enabled: boolean;
+  tool_disabled_message: string;
 }
 
 export interface JobProgress {
