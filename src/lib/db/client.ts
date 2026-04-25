@@ -62,13 +62,16 @@ function initDb(db: DatabaseSync): void {
   try { db.exec("ALTER TABLE logs ADD COLUMN browser TEXT DEFAULT 'unknown'"); } catch { /* already exists */ }
   try { db.exec("ALTER TABLE logs ADD COLUMN os TEXT DEFAULT 'unknown'"); } catch { /* already exists */ }
 
+  // Migrate legacy 'both' value → 'webp' (both was never producing two files)
+  try { db.exec("UPDATE settings SET value = 'webp' WHERE key = 'output_format' AND value = 'both'"); } catch { /* safe */ }
+
   // Default settings
   const defaults: Record<string, string> = {
     cleanup_interval_ms: '3600000',
     max_file_size_mb: '20',
     max_files_per_upload: '50',
     logo_path: '/logo.png',
-    output_format: 'both',
+    output_format: 'webp',
     about_us_text: 'درنیکا وب — ارائه‌دهنده ابزارهای هوشمند وب',
     app_title: 'دستبار تصویر درنیکا وب',
     app_subtitle: 'فشرده‌سازی هوشمند تصویر بدون افت کیفیت',
@@ -371,7 +374,7 @@ export function getAllSettings(): AdminSettings {
     max_file_size_mb: Number(map.max_file_size_mb ?? 20),
     max_files_per_upload: Number(map.max_files_per_upload ?? 50),
     logo_path: map.logo_path ?? '/logo.png',
-    output_format: (map.output_format ?? 'both') as 'webp' | 'jpeg' | 'both',
+    output_format: (map.output_format ?? 'webp') as 'webp' | 'jpeg',
     about_us_text: map.about_us_text ?? 'درنیکا وب — ارائه‌دهنده ابزارهای هوشمند وب',
     app_title: map.app_title ?? 'دستبار تصویر درنیکا وب',
     app_subtitle: map.app_subtitle ?? 'فشرده‌سازی هوشمند تصویر بدون افت کیفیت',

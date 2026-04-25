@@ -25,5 +25,7 @@ export async function GET(request: NextRequest) {
     tool_enabled: s.tool_enabled,
     tool_disabled_message: s.tool_disabled_message,
     cleanup_interval_ms: s.cleanup_interval_ms,
+    max_file_size_mb: s.max_file_size_mb,
+    max_files_per_upload: s.max_files_per_upload,
   });
 }

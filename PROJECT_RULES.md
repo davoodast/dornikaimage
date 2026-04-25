@@ -118,7 +118,8 @@ dornikaimage/
 ├── scripts/
 │   ├── generate-password-hash.js       # CLI: node scripts/generate-password-hash.js <pw>
 │   ├── generate-icons.js               # CLI: generate PWA icons using Sharp
-│   └── _write-env.js                   # Helper: writes .env.local with properly escaped bcrypt hash
+│   ├── _write-env.js                   # Helper: writes .env.local with properly escaped bcrypt hash
+│   └── _rebuild-admin-v2.mjs           # Dev helper: regenerate DashboardCharts.tsx + LogsTable.tsx
 ├── data/                               # Runtime data (gitignored)
 │   ├── logs.db                         # SQLite database (WAL mode)
 │   └── app.log                         # Winston log file (JSON, 10MB×5)

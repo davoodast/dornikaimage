@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { AdminSettings } from '@/types';
 
 type Toast = { type: 'success' | 'error'; msg: string } | null;
@@ -21,6 +22,8 @@ export default function SettingsForm() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('content');
+  const [isOpen, setIsOpen] = useState(true);
+  const [mobileTabOpen, setMobileTabOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm_password: '' });
@@ -154,25 +157,88 @@ export default function SettingsForm() {
 
   return (
     <section className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-      <div className="px-5 py-4 border-b border-slate-800">
-        <h2 className="font-semibold text-slate-100">تنظیمات سیستم</h2>
+      {/* Collapsible header */}
+      <div
+        className="px-5 py-4 border-b border-slate-800 flex items-center justify-between cursor-pointer select-none"
+        onClick={() => setIsOpen((v) => !v)}
+      >
+        <h2 className="font-semibold text-slate-100 text-sm">{'تنظیمات سیستم'}</h2>
+        <svg
+          className={`w-4 h-4 text-slate-500 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
       </div>
 
-      {/* Tab bar */}
-      <div className="flex border-b border-slate-800 overflow-x-auto">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`px-5 py-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
-              activeTab === tab.id
-                ? 'border-teal-500 text-teal-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div
+            key="settings-body"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="overflow-hidden"
           >
-            {tab.label}
+
+      {/* Tab bar — scrollable on desktop, dropdown on mobile */}
+      <div className="border-b border-slate-800">
+        {/* Mobile: tab select dropdown */}
+        <div className="sm:hidden px-4 py-2">
+          <button
+            onClick={() => setMobileTabOpen((v) => !v)}
+            className="w-full flex items-center justify-between bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200"
+          >
+            <span>{TABS.find((t) => t.id === activeTab)?.label}</span>
+            <svg className={`w-4 h-4 transition-transform ${mobileTabOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
           </button>
-        ))}
+          <AnimatePresence>
+            {mobileTabOpen && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-1 bg-slate-800 rounded-lg overflow-hidden">
+                  {TABS.map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => { setActiveTab(tab.id); setMobileTabOpen(false); }}
+                      className={`w-full text-right px-3 py-2.5 text-sm transition-colors ${
+                        activeTab === tab.id
+                          ? 'bg-teal-900/40 text-teal-400'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+        {/* Desktop: scrollable tab strip */}
+        <div className="hidden sm:flex overflow-x-auto">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-5 py-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
+                activeTab === tab.id
+                  ? 'border-teal-500 text-teal-400'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Tab 1: محتوا */}
@@ -289,15 +355,14 @@ export default function SettingsForm() {
           <div>
             <label className={labelCls}>فرمت خروجی</label>
             <select
-              value={form.output_format ?? 'both'}
+              value={form.output_format ?? 'webp'}
               onChange={(e) =>
                 setForm((f) => ({ ...f, output_format: e.target.value as AdminSettings['output_format'] }))
               }
               className={inputCls}
             >
-              <option value="both">هر دو (WebP + JPEG)</option>
-              <option value="webp">WebP</option>
-              <option value="jpeg">JPEG</option>
+              <option value="webp">{'WebP (توصیه‌ شده — فشرده‌ترین)'}</option>
+              <option value="jpeg">{'JPEG (سازگاری بیشتر)'}</option>
             </select>
           </div>
           <div>
@@ -513,6 +578,10 @@ export default function SettingsForm() {
           </div>
         </form>
       )}
+
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {toast && (
         <div

@@ -110,7 +110,7 @@ export default function ImageGrid({
         initial="hidden"
         animate="show"
         variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}
-        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"
+        className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"
       >
         <AnimatePresence>
           {jobList.map((job) => (

@@ -12,8 +12,18 @@ import type { CompressionJob, CompressionLevel } from '@/types';
 
 const VALID_COMPRESSION_LEVELS: CompressionLevel[] = ['balanced', 'high_compression', 'high_quality'];
 
-const MAX_FILE_SIZE = () => (Number(process.env.MAX_FILE_SIZE_MB) || 20) * 1024 * 1024;
-const MAX_FILES = () => Number(process.env.MAX_FILES_PER_UPLOAD) || 50;
+const MAX_FILE_SIZE = () => (Number(getSetting('max_file_size_mb')) || 20) * 1024 * 1024;
+const MAX_FILES = () => Number(getSetting('max_files_per_upload')) || 50;
+
+/** Extract real client IP from common proxy headers */
+function getClientIp(req: NextRequest): string {
+  return (
+    req.headers.get('x-real-ip') ??
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+    req.headers.get('cf-connecting-ip') ??
+    'unknown'
+  );
+}
 
 const UPLOADS_DIR = path.resolve(process.cwd(), 'uploads');
 const COMPRESSED_DIR = path.resolve(process.cwd(), 'compressed');
@@ -37,7 +47,7 @@ function parseUserAgent(ua: string): { deviceType: 'mobile' | 'desktop'; browser
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   // Configurable per-IP rate limit (separate from middleware hard limit)
-  const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const clientIp = getClientIp(req);
   const rl = uploadRateLimiter.check(clientIp);
   if (!rl.allowed) {
     const msg = getSetting('rate_limit_message') ?? 'تعداد درخواست‌های شما بیش از حد مجاز است. لطفاً کمی صبر کنید.';
@@ -56,11 +66,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const files = formData.getAll('files') as File[];
+  const maxFiles = MAX_FILES();
   if (!files || files.length === 0) {
     return NextResponse.json({ error: 'هیچ فایلی ارسال نشده' }, { status: 400 });
   }
-  if (files.length > MAX_FILES()) {
-    return NextResponse.json({ error: `حداکثر ${MAX_FILES()} فایل مجاز است` }, { status: 400 });
+  if (files.length > maxFiles) {
+    return NextResponse.json({ error: `حداکثر تعداد فایل مجاز ${maxFiles} عدد است` }, { status: 400 });
   }
 
   // Read and validate compressionLevel (OWASP A03: whitelist validation)
@@ -81,8 +92,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   let totalOriginalBytes = 0;
 
   for (const file of files) {
-    if (file.size > MAX_FILE_SIZE()) {
-      return NextResponse.json({ error: `فایل بیش از حد مجاز است` }, { status: 400 });
+    const maxFileSizeBytes = MAX_FILE_SIZE();
+    if (file.size > maxFileSizeBytes) {
+      const limitMb = Math.round(maxFileSizeBytes / (1024 * 1024));
+      return NextResponse.json({ error: `حجم فایل بیشتر از حد مجاز (${limitMb} MB) است` }, { status: 400 });
     }
 
     const arrayBuffer = await file.arrayBuffer();
@@ -120,7 +133,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       format: detectedFormat,
       status: 'queued',
       compressionLevel,
-      outputFormat: (getSetting('output_format') ?? 'webp') as 'webp' | 'jpeg' | 'both',
+      outputFormat: (getSetting('output_format') ?? 'webp') as 'webp' | 'jpeg',
     };
 
     queue.enqueue(job).catch(() => { /* errors tracked in sessionProgress */ });

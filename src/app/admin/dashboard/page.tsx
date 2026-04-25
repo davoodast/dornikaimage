@@ -40,7 +40,7 @@ export default async function AdminDashboardPage() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto p-6 space-y-8">
+      <div className="max-w-7xl mx-auto p-3 sm:p-6 space-y-4 sm:space-y-8">
         <DashboardCharts />
         <LogsTable />
         <SettingsForm />

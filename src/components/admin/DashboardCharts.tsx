@@ -134,7 +134,7 @@ export default function DashboardCharts() {
               </>
             ) : (
               <>
-                <div className={`text-2xl font-bold tabular-nums ${kpi.color}`}>{kpi.value}</div>
+                <div className={`text-xl sm:text-2xl font-bold tabular-nums ${kpi.color}`}>{kpi.value}</div>
                 <div className="text-xs text-slate-500 mt-1 leading-tight">{kpi.label}</div>
               </>
             )}
@@ -149,17 +149,17 @@ export default function DashboardCharts() {
         transition={{ delay: 0.22, duration: 0.4 }}
         className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden"
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 sm:px-5 py-3 sm:py-4 border-b border-slate-800 gap-2">
           <div>
             <h3 className="font-semibold text-slate-100 text-sm">{'آمار آپلودها'}</h3>
             <p className="text-xs text-slate-600 mt-0.5">{xLabel}</p>
           </div>
-          <div className="flex gap-1 bg-slate-800/80 rounded-lg p-1">
+          <div className="flex gap-1 bg-slate-800/80 rounded-lg p-1 self-start sm:self-auto">
             {(['hourly', 'daily', 'weekly', 'monthly'] as Tab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => setActiveTab(t)}
-                className={`text-xs px-2.5 py-1 rounded-md transition-all ${
+                className={`text-xs px-2 sm:px-2.5 py-1 rounded-md transition-all ${
                   activeTab === t
                     ? 'bg-teal-600 text-white shadow-sm'
                     : 'text-slate-400 hover:text-slate-200'
@@ -179,7 +179,7 @@ export default function DashboardCharts() {
               {'داده‌ای برای نمایش وجود ندارد'}
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={270}>
+            <ResponsiveContainer width="100%" height={220}>
               <AreaChart data={chartData} margin={{ top: 8, right: 12, bottom: 4, left: -28 }}>
                 <defs>
                   {SERIES.map((s) => (

@@ -49,7 +49,7 @@ export const settingsSchema = z
     cleanup_interval_ms: z.number().int().min(10_000).max(86_400_000).optional(),
     max_file_size_mb: z.number().int().min(1).max(500).optional(),
     max_files_per_upload: z.number().int().min(1).max(200).optional(),
-    output_format: z.enum(['webp', 'jpeg', 'both']).optional(),
+    output_format: z.enum(['webp', 'jpeg', 'both']).optional().transform(v => v === 'both' ? 'webp' : v),
     about_us_text: z.string().min(1).max(2000).optional(),
     app_title: z.string().min(1).max(100).optional(),
     app_subtitle: z.string().min(1).max(200).optional(),

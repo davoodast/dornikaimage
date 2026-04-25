@@ -18,6 +18,8 @@ interface PublicSettings {
   tool_enabled: boolean;
   tool_disabled_message: string;
   cleanup_interval_ms: number;
+  max_file_size_mb: number;
+  max_files_per_upload: number;
 }
 
 const DEFAULT_SETTINGS: PublicSettings = {
@@ -29,6 +31,8 @@ const DEFAULT_SETTINGS: PublicSettings = {
   tool_enabled: true,
   tool_disabled_message: '',
   cleanup_interval_ms: 3600000,
+  max_file_size_mb: 20,
+  max_files_per_upload: 50,
 };
 
 interface UploadedJob {
@@ -178,27 +182,27 @@ export default function Home() {
       transition={{ duration: 0.3 }}
     >
       <header className="border-b border-slate-800/60 bg-slate-950/80 backdrop-blur-sm sticky top-0 z-20">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-2 sm:gap-3">
           <div className="w-9 h-9 rounded-xl overflow-hidden bg-slate-800 flex items-center justify-center shrink-0">
             <Image src="/logo.png" alt="لوگو درنیکا وب" width={36} height={36} className="object-contain" />
           </div>
-          <div className="leading-tight">
-            <span className="font-bold text-slate-100 text-sm block">{publicSettings.app_title}</span>
-            <span className="text-slate-600 text-[11px]">Dornika Web Image Compressor</span>
+          <div className="leading-tight min-w-0 flex-1">
+            <span className="font-bold text-slate-100 text-xs sm:text-sm block truncate">{publicSettings.app_title}</span>
+            <span className="text-slate-600 text-[10px] sm:text-[11px] hidden xs:block">Dornika Web Image Compressor</span>
           </div>
-          <div className="mr-auto">
+          <div className="shrink-0">
             <button
               type="button"
               onClick={() => setShowAbout((v) => !v)}
-              className="text-slate-500 hover:text-teal-400 text-xs transition-colors"
+              className="text-slate-500 hover:text-teal-400 text-xs transition-colors whitespace-nowrap"
             >
-              درباره ما
+              {'درباره ما'}
             </button>
           </div>
         </div>
       </header>
 
-      <div className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-10 flex flex-col">
+      <div className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-10 flex flex-col">
         {/* Tool disabled state */}
         {!publicSettings.tool_enabled ? (
           <div className="flex flex-col items-center justify-center py-24 space-y-4">
@@ -250,7 +254,7 @@ export default function Home() {
                   </motion.div>
                 )}
 
-                <DropZone files={pendingFiles} onFilesChange={setPendingFiles} maxFiles={50} maxSizeMB={20} />
+                <DropZone files={pendingFiles} onFilesChange={setPendingFiles} maxFiles={publicSettings.max_files_per_upload} maxSizeMB={publicSettings.max_file_size_mb} />
 
                 {/* About Us slide-down panel — below dropzone */}
                 <AnimatePresence>
