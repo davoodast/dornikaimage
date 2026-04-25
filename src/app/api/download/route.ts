@@ -9,6 +9,7 @@ import fs from 'fs';
 import { uuidSchema } from '@/lib/security/validate';
 import { assertPathWithin } from '@/lib/security/fileValidator';
 import { getCompressionQueue } from '@/lib/compression/queue';
+import { logDownload } from '@/lib/logger/winston';
 
 const COMPRESSED_DIR = path.resolve(process.cwd(), 'compressed');
 
@@ -48,6 +49,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 
   const fileBuffer = fs.readFileSync(filePath);
+  logDownload({ sessionId, jobId });
   return new NextResponse(fileBuffer, {
     status: 200,
     headers: {

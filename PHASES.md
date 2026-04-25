@@ -14,8 +14,8 @@
 | 2 | Security Middleware (OWASP) | ✅ تکمیل | 1404/02/05 |
 | 3 | Sharp Compression Engine | ✅ تکمیل | 1404/03/08 |
 | 4 | API Routes | ✅ تکمیل | 1404/03/08 |
-| 5 | Landing Page UI | ⏳ در انتظار | — |
-| 6 | Logging (Winston + SQLite) | ⏳ در انتظار | — |
+| 5 | Landing Page UI | ✅ تکمیل | 1404/02/05 |
+| 6 | Logging (Winston + SQLite) | ✅ تکمیل | 1404/02/05 |
 | 7 | Admin Panel | ⏳ در انتظار | — |
 | 8 | PWA Setup | ⏳ در انتظار | — |
 | 9 | Final Audit + README | ⏳ در انتظار | — |

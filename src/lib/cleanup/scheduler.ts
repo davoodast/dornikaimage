@@ -8,6 +8,7 @@ import cron from 'node-cron';
 import path from 'path';
 import fs from 'fs';
 import { getCompressionQueue } from '@/lib/compression/queue';
+import { logCleanup } from '@/lib/logger/winston';
 
 const UPLOADS_DIR = path.resolve(process.cwd(), 'uploads');
 const COMPRESSED_DIR = path.resolve(process.cwd(), 'compressed');
@@ -58,8 +59,13 @@ export function startCleanupScheduler(): void {
   cron.schedule('*/30 * * * * *', () => {
     const queue = getCompressionQueue();
     const maxAge = getCleanupIntervalMs();
+    const beforeSessions = queue.sessionProgress.size;
     removeOldSessions(UPLOADS_DIR, maxAge, queue);
     removeOldSessions(COMPRESSED_DIR, maxAge, queue);
+    const removed = beforeSessions - queue.sessionProgress.size;
+    if (removed > 0) {
+      logCleanup({ filesDeleted: 0, sessionsCleared: removed });
+    }
   });
 
   console.info('[cleanup] scheduler started (every 30s)');

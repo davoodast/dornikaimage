@@ -15,10 +15,9 @@ import fs from 'fs';
 import { assertPathWithin } from '@/lib/security/fileValidator';
 import type { CompressionJob, CompressionResult, JobProgress } from '@/types';
 
-const WORKER_PATH = path.resolve(process.cwd(), '.next/server/chunks/worker.js');
-// In development use ts-node or the compiled path; resolved by Next.js build.
-// We use __dirname-relative path to support both dev and prod.
-const WORKER_SCRIPT = path.join(__dirname, 'worker.js');
+// worker.cjs is a standalone CommonJS file — NOT bundled by Next.js.
+// Loaded at runtime via absolute path so it's accessible in both dev and production.
+const WORKER_SCRIPT = path.resolve(process.cwd(), 'src/lib/compression/worker.cjs');
 
 const UPLOADS_DIR = path.resolve(process.cwd(), 'uploads');
 const COMPRESSED_DIR = path.resolve(process.cwd(), 'compressed');
@@ -31,7 +30,6 @@ interface PendingJob {
 
 class CompressionQueue extends EventEmitter {
   private readonly poolSize: number;
-  private readonly freeWorkers: Worker[] = [];
   private readonly busyWorkers: Map<Worker, PendingJob> = new Map();
   private readonly jobQueue: PendingJob[] = [];
 
@@ -41,70 +39,77 @@ class CompressionQueue extends EventEmitter {
   constructor() {
     super();
     this.poolSize = Math.max(2, os.cpus().length);
-    for (let i = 0; i < this.poolSize; i++) {
-      this.freeWorkers.push(this.createWorker());
-    }
+    // Workers are created lazily per job — no pre-creation.
+    // Reason: Node.js v24 Worker Thread V8 snapshot deserialization causes OOM
+    // when N workers are spawned simultaneously at startup.
   }
 
-  private createWorker(): Worker {
-    const w = new Worker(WORKER_SCRIPT);
-    w.on('message', (msg: CompressionResult | { jobId: string; error: string }) => {
-      const pending = this.busyWorkers.get(w);
-      if (!pending) return;
-      this.busyWorkers.delete(w);
-      this.freeWorkers.push(w);
+  /** Spawn one Worker for a specific job (workerData carries all params). */
+  private spawnJobWorker(pending: PendingJob): void {
+    const { job } = pending;
+    this.updateProgress(job, 'processing');
 
+    let worker: Worker;
+    try {
+      worker = new Worker(WORKER_SCRIPT, {
+        workerData: {
+          jobId: job.jobId,
+          filename: job.filename,
+          inputPath: job.originalPath,
+          outputPath: job.outputPath,
+          format: job.format,
+          uploadsDir: UPLOADS_DIR,
+          compressedDir: COMPRESSED_DIR,
+        },
+      });
+    } catch (err) {
+      this.updateProgress(job, 'error', undefined, (err as Error).message);
+      pending.reject(err as Error);
+      this.drain();
+      return;
+    }
+
+    this.busyWorkers.set(worker, pending);
+
+    worker.on('message', (msg: CompressionResult | { jobId: string; error: string }) => {
+      this.busyWorkers.delete(worker);
       if ('error' in msg) {
-        this.updateProgress(pending.job, 'error', undefined, msg.error);
+        this.updateProgress(job, 'error', undefined, msg.error);
         pending.reject(new Error(msg.error));
       } else {
-        this.updateProgress(pending.job, 'done', msg);
+        this.updateProgress(job, 'done', msg);
         pending.resolve(msg);
       }
       this.drain();
     });
-    w.on('error', (err) => {
-      const pending = this.busyWorkers.get(w);
-      if (pending) {
-        this.busyWorkers.delete(w);
-        // Re-queue the failed job once, then reject on second failure
-        const retried = (pending.job as CompressionJob & { _retried?: boolean })._retried;
-        if (!retried) {
-          (pending.job as CompressionJob & { _retried?: boolean })._retried = true;
-          this.jobQueue.unshift(pending); // push back to front of queue
-        } else {
-          this.updateProgress(pending.job, 'error', undefined, err.message);
-          pending.reject(err);
-        }
+
+    worker.on('error', (err) => {
+      this.busyWorkers.delete(worker);
+      const retried = (job as CompressionJob & { _retried?: boolean })._retried;
+      if (!retried) {
+        (job as CompressionJob & { _retried?: boolean })._retried = true;
+        this.jobQueue.unshift(pending);
+      } else {
+        this.updateProgress(job, 'error', undefined, err.message);
+        pending.reject(err);
       }
-      // Respawn a replacement worker
-      const replacement = this.createWorker();
-      this.freeWorkers.push(replacement);
       this.drain();
     });
-    w.on('exit', (code) => {
-      if (code !== 0) {
-        const pending = this.busyWorkers.get(w);
-        if (pending) {
-          this.busyWorkers.delete(w);
-          this.updateProgress(pending.job, 'error', undefined, `Worker exited code ${code}`);
-          pending.reject(new Error(`Worker exited code ${code}`));
-        }
-        this.freeWorkers.push(this.createWorker());
+
+    worker.on('exit', (code) => {
+      if (code !== 0 && this.busyWorkers.has(worker)) {
+        this.busyWorkers.delete(worker);
+        this.updateProgress(job, 'error', undefined, `Worker exited code ${code}`);
+        pending.reject(new Error(`Worker exited code ${code}`));
         this.drain();
       }
     });
-    return w;
   }
 
   private drain(): void {
-    while (this.freeWorkers.length > 0 && this.jobQueue.length > 0) {
-      const worker = this.freeWorkers.pop()!;
+    while (this.jobQueue.length > 0 && this.busyWorkers.size < this.poolSize) {
       const pending = this.jobQueue.shift()!;
-      this.busyWorkers.set(worker, pending);
-      this.updateProgress(pending.job, 'processing');
-      worker.postMessage(null); // signal start — actual data in workerData
-      // Re-create worker with correct workerData is handled below
+      this.spawnJobWorker(pending);
     }
   }
 
@@ -127,62 +132,12 @@ class CompressionQueue extends EventEmitter {
 
     return new Promise<CompressionResult>((resolve, reject) => {
       const pending: PendingJob = { job, resolve, reject };
-      if (this.freeWorkers.length > 0) {
-        const worker = this.freeWorkers.pop()!;
-        this.runOnWorker(worker, pending);
+      if (this.busyWorkers.size < this.poolSize) {
+        this.spawnJobWorker(pending);
       } else {
         this.jobQueue.push(pending);
         this.updateProgress(job, 'queued');
       }
-    });
-  }
-
-  private runOnWorker(worker: Worker, pending: PendingJob): void {
-    const { job } = pending;
-    this.busyWorkers.set(worker, pending);
-    this.updateProgress(job, 'processing');
-
-    // Workers read data via workerData — we create a new Worker per job
-    // because workerData is set at construction time.
-    // The pool strategy: terminate the worker slot and create a new one with data.
-    worker.terminate().then(() => {
-      const jobWorker = new Worker(WORKER_SCRIPT, {
-        workerData: {
-          jobId: job.jobId,
-          filename: job.filename,
-          inputPath: job.originalPath,
-          outputPath: job.outputPath,
-          format: job.format,
-          uploadsDir: UPLOADS_DIR,
-          compressedDir: COMPRESSED_DIR,
-        },
-      });
-
-      this.busyWorkers.delete(worker);
-      this.busyWorkers.set(jobWorker, pending);
-
-      jobWorker.on('message', (msg: CompressionResult | { jobId: string; error: string }) => {
-        this.busyWorkers.delete(jobWorker);
-        // Return a fresh idle worker to the pool
-        this.freeWorkers.push(this.createWorker());
-
-        if ('error' in msg) {
-          this.updateProgress(job, 'error', undefined, msg.error);
-          pending.reject(new Error(msg.error));
-        } else {
-          this.updateProgress(job, 'done', msg);
-          pending.resolve(msg);
-        }
-        this.drain();
-      });
-
-      jobWorker.on('error', (err) => {
-        this.busyWorkers.delete(jobWorker);
-        this.freeWorkers.push(this.createWorker());
-        this.updateProgress(job, 'error', undefined, err.message);
-        pending.reject(err);
-        this.drain();
-      });
     });
   }
 

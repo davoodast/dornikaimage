@@ -49,6 +49,7 @@
 ```
 dornikaimage/
 ├── src/
+│   ├── instrumentation.ts              # Next.js startup hook (cleanup scheduler init)
 │   ├── app/
 │   │   ├── page.tsx                    # Landing page (main UI)
 │   │   ├── layout.tsx                  # Root layout with meta/PWA tags
@@ -81,7 +82,7 @@ dornikaimage/
 │   │   │   ├── worker.ts               # Worker Thread: Sharp processing
 │   │   │   └── queue.ts                # Worker Thread Pool + job queue
 │   │   ├── db/
-│   │   │   └── client.ts               # better-sqlite3 singleton + typed queries
+│   │   │   └── client.ts               # node:sqlite singleton + typed queries
 │   │   ├── auth/
 │   │   │   └── jwt.ts                  # signToken / verifyToken via jose
 │   │   ├── security/
@@ -97,7 +98,7 @@ dornikaimage/
 │   └── types/
 │       └── index.ts                    # Shared TypeScript interfaces
 ├── public/
-│   ├── fonts/                          # Inter font files (local, no CDN)
+│   ├── fonts/                          # Local fonts (no CDN): inter.var.woff2, vazirmatn-*.woff2
 │   ├── icons/                          # PWA icons (192x192, 512x512, maskable)
 │   ├── logo.png                        # App logo (replaceable via admin panel)
 │   └── manifest.webmanifest            # PWA manifest
@@ -179,6 +180,7 @@ Permissions-Policy: camera=(), microphone=(), geolocation=()
 - **Imports** همیشه از `@/` alias استفاده شود (tsconfig paths)
 - **No CDN** هیچ URL خارجی در هیچ فایلی — fonts, icons, scripts همه local
 - **فونت Vazirmatn** فونت اصلی برای متن فارسی: فایل‌های woff2 در `public/fonts/vazirmatn-*.woff2` — هرگز از CDN استفاده نشود؛ `font-family` در globals.css باید `'Vazirmatn'` اول باشد
+- **ساختار پوشه همیشه به‌روز باشد** هر بار که فایل یا پوشه‌ی جدیدی به پروژه اضافه می‌شود (به‌ویژه در `src/`, `public/`, `scripts/`) باید Section 3 این فایل (Folder Structure) آپدیت شود. این قانون برای agent اجباری است: پیش از commit، ساختار را sync کن.
 
 ---
 

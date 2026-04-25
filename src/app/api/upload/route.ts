@@ -10,6 +10,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { validateFileSignature, sanitizeFilename, FORMAT_TO_EXT } from '@/lib/security/fileValidator';
 import { ALLOWED_MIME_TYPES } from '@/lib/security/validate';
 import { getCompressionQueue } from '@/lib/compression/queue';
+import { insertLog, hashValue } from '@/lib/db/client';
+import { logUpload, logValidationFailure } from '@/lib/logger/winston';
 import type { CompressionJob } from '@/types';
 
 const MAX_FILE_SIZE = () => (Number(process.env.MAX_FILE_SIZE_MB) || 20) * 1024 * 1024;
@@ -54,10 +56,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // OWASP A08: detect format from magic bytes, not filename/MIME
     const detectedFormat = validateFileSignature(buffer);
     if (!detectedFormat) {
+      logValidationFailure({ reason: 'invalid_magic_bytes' });
       return NextResponse.json({ error: `فرمت فایل پشتیبانی نمی‌شود` }, { status: 415 });
     }
 
     if (!ALLOWED_MIME_TYPES.includes(file.type as (typeof ALLOWED_MIME_TYPES)[number])) {
+      logValidationFailure({ reason: 'disallowed_mime_type' });
       return NextResponse.json({ error: `نوع فایل مجاز نیست` }, { status: 415 });
     }
 
@@ -83,6 +87,27 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     queue.enqueue(job).catch(() => { /* errors tracked in sessionProgress */ });
     jobs.push({ jobId, filename });
+  }
+
+  // Log the upload event (OWASP A09)
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const ua = req.headers.get('user-agent') ?? 'unknown';
+  const totalSize = jobs.length; // approximate — we don't need exact bytes here
+  try {
+    const timestamp = new Date().toISOString();
+    insertLog({
+      timestamp,
+      ipHash: hashValue(ip),
+      sessionId,
+      fileCount: jobs.length,
+      totalOriginalBytes: 0, // updated later by compression complete event
+      totalCompressedBytes: 0,
+      savingsPercent: 0,
+      userAgentHash: hashValue(ua),
+    });
+    logUpload({ sessionId, fileCount: jobs.length, totalSizeBytes: totalSize, ipHash: hashValue(ip) });
+  } catch {
+    // logging failure must never break the upload response
   }
 
   return NextResponse.json({ sessionId, jobs }, { status: 202 });
