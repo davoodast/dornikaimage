@@ -58,27 +58,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // RAM back-pressure: check Sharp in-flight bytes vs admin-configured threshold.
-  // We estimate 4× file size in worker heap (Sharp decode+encode buffers).
-  // Framework heap (Next.js, SQLite, etc.) is NOT counted — only compression work.
-  const maxRamMb = Number(getSetting('max_ram_mb')) || 512;
-  const queue = getCompressionQueue();
-  const inFlightBytes = queue.getInFlightBytes();
-  const estimatedUsageMb = (inFlightBytes * 4) / (1024 * 1024);
-  const ramPct = estimatedUsageMb / maxRamMb;
-  if (ramPct >= 0.90) {
-    return NextResponse.json(
-      { error: 'سرور در حال پردازش تعداد زیادی تصویر است. لطفاً ۳۰ ثانیه دیگر مجدداً امتحان کنید.', retryAfter: 30 },
-      { status: 503, headers: { 'Retry-After': '30' } },
-    );
-  }
-  if (ramPct >= 0.75) {
-    return NextResponse.json(
-      { error: 'سرور مشغول است. لطفاً ۱۵ ثانیه دیگر مجدداً امتحان کنید.', retryAfter: 15 },
-      { status: 503, headers: { 'Retry-After': '15' } },
-    );
-  }
-
   const startTime = Date.now();
   let formData: FormData;
   try {
@@ -94,6 +73,30 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
   if (files.length > maxFiles) {
     return NextResponse.json({ error: `حداکثر تعداد فایل مجاز ${maxFiles} عدد است` }, { status: 400 });
+  }
+
+  // RAM back-pressure: estimate Sharp worker memory for this batch + already in-flight.
+  // Sharp needs ~4× file size for decode + encode buffers per image.
+  // File.size is the original file size (no buffer allocated yet — cheap to read).
+  // This correctly blocks even a single large upload when max_ram_mb is small.
+  const maxRamMb = Number(getSetting('max_ram_mb')) || 512;
+  const queue = getCompressionQueue();
+  const inFlightBytes = queue.getInFlightBytes();
+  const newBatchBytes = files.reduce((sum, f) => sum + f.size, 0);
+  const estimatedMb = ((inFlightBytes + newBatchBytes) * 4) / (1024 * 1024);
+  const ramPct = estimatedMb / maxRamMb;
+  if (ramPct >= 1.0) {
+    const wait = inFlightBytes > 0 ? 30 : 15;
+    return NextResponse.json(
+      { error: `سرور ظرفیت ندارد (تخمین مصرف RAM: ${Math.round(estimatedMb)} MB از ${maxRamMb} MB). لطفاً ${wait} ثانیه دیگر امتحان کنید.`, retryAfter: wait },
+      { status: 503, headers: { 'Retry-After': String(wait) } },
+    );
+  }
+  if (ramPct >= 0.80) {
+    return NextResponse.json(
+      { error: `سرور مشغول است (تخمین: ${Math.round(estimatedMb)} MB از ${maxRamMb} MB). لطفاً ۱۵ ثانیه دیگر امتحان کنید.`, retryAfter: 15 },
+      { status: 503, headers: { 'Retry-After': '15' } },
+    );
   }
 
   // Read and validate compressionLevel (OWASP A03: whitelist validation)
