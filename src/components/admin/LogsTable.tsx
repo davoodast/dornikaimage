@@ -42,7 +42,7 @@ function filtersToParams(f: Filters, page: number, limit: number): string {
   return p.toString();
 }
 
-export default function LogsTable() {
+export default function LogsTable({ refreshSignal = 0 }: { refreshSignal?: number }) {
   const [data, setData] = useState<LogsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -70,7 +70,7 @@ export default function LogsTable() {
     }
   }, []);
 
-  useEffect(() => { fetchLogs(page, appliedFilters); }, [page, appliedFilters, fetchLogs]);
+  useEffect(() => { fetchLogs(page, appliedFilters); }, [page, appliedFilters, fetchLogs, refreshSignal]);
 
   useEffect(() => {
     fetch('/api/admin/settings')

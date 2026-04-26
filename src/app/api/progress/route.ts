@@ -21,6 +21,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   }
 
   const queue = getCompressionQueue();
+  const sid = parsed.data as string;
 
   const encoder = new TextEncoder();
   let closed = false;
@@ -33,34 +34,34 @@ export async function GET(req: NextRequest): Promise<Response> {
       };
 
       // Send current snapshot immediately
-      const snapshot = queue.getSessionProgress(parsed.data);
+      const snapshot = queue.getSessionProgress(sid);
       send({ type: 'snapshot', jobs: snapshot });
 
-      if (queue.isSessionComplete(parsed.data)) {
+      if (queue.isSessionComplete(sid)) {
         controller.close();
         return;
       }
 
       // Subscribe to future progress events
-      const onProgress = ({ sessionId: sid, progress }: { sessionId: string; progress: JobProgress }) => {
-        if (sid !== parsed.data) return;
+      const onProgress = ({ sessionId: evtSid, progress }: { sessionId: string; progress: JobProgress }) => {
+        if (evtSid !== sid) return;
         send({ type: 'progress', progress });
-        if (queue.isSessionComplete(parsed.data)) {
+        if (queue.isSessionComplete(sid)) {
           send({ type: 'done' });
           // Update log with actual compression savings + mark success/failure
           try {
             if (getSetting('log_enabled') !== '0') {
-              const allJobs = queue.getSessionProgress(parsed.data);
+              const allJobs = queue.getSessionProgress(sid);
               const totalCompressed = allJobs.reduce((s, j) => s + (j.compressedSize ?? 0), 0);
               const totalOriginal = allJobs.reduce((s, j) => s + (j.originalSize ?? 0), 0);
               const pct = totalOriginal > 0
                 ? Math.round(((totalOriginal - totalCompressed) / totalOriginal) * 100)
                 : 0;
-              updateLogSavings(parsed.data, totalCompressed, pct);
+              updateLogSavings(sid, totalCompressed, pct);
               // Mark as failed if ANY job errored
               const hasErrors = allJobs.some((j) => j.status === 'error');
               if (hasErrors) {
-                updateLogSuccess(parsed.data, false);
+                updateLogSuccess(sid, false);
               }
             }
           } catch { /* log update failure must not break SSE */ }
@@ -77,7 +78,7 @@ export async function GET(req: NextRequest): Promise<Response> {
         // Mark session as failed in log on timeout
         try {
           if (getSetting('log_enabled') !== '0') {
-            updateLogSuccess(parsed.data, false);
+            updateLogSuccess(sid, false);
           }
         } catch { /* safe */ }
         cleanup();
@@ -88,6 +89,9 @@ export async function GET(req: NextRequest): Promise<Response> {
         closed = true;
         clearTimeout(timer);
         queue.off('progress', onProgress);
+        // Free session from in-memory queue immediately so RAM is reclaimed
+        // (files are deleted by cleanup scheduler; this releases the progress Map)
+        queue.removeSession(sid);
       }
 
       // Handle client disconnect

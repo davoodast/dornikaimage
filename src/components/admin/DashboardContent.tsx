@@ -1,31 +1,39 @@
 'use client';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DashboardCharts from './DashboardCharts';
 import LogsTable from './LogsTable';
 import SettingsForm from './SettingsForm';
 
 export default function DashboardContent() {
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshSignal, setRefreshSignal] = useState(0);
   const [isSpinning, setIsSpinning] = useState(false);
   const [showFlash, setShowFlash] = useState(false);
+  // Clock — client-only to avoid hydration mismatch
+  const [clock, setClock] = useState('');
+
+  useEffect(() => {
+    const update = () =>
+      setClock(new Date().toLocaleString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const handleRefresh = useCallback(() => {
     if (isSpinning) return;
     setIsSpinning(true);
     setShowFlash(true);
-    setRefreshKey((k) => k + 1);
+    setRefreshSignal((k) => k + 1);
     setTimeout(() => setIsSpinning(false), 900);
-    setTimeout(() => setShowFlash(false), 600);
+    setTimeout(() => setShowFlash(false), 500);
   }, [isSpinning]);
 
   return (
     <div className="space-y-4 sm:space-y-8">
       {/* Refresh bar */}
       <div className="flex items-center justify-between">
-        <p className="text-xs text-slate-600 tabular-nums">
-          {new Date().toLocaleString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-        </p>
+        <p className="text-xs text-slate-600 tabular-nums min-h-[1em]">{clock}</p>
         <motion.button
           type="button"
           onClick={handleRefresh}
@@ -57,17 +65,18 @@ export default function DashboardContent() {
         {showFlash && (
           <motion.div
             key="flash"
-            initial={{ opacity: 0.15 }}
+            initial={{ opacity: 0.2 }}
             animate={{ opacity: 0 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.5 }}
-            className="fixed inset-0 bg-teal-400/5 pointer-events-none z-50"
+            transition={{ duration: 0.45 }}
+            className="fixed inset-0 bg-teal-400/8 pointer-events-none z-50"
           />
         )}
       </AnimatePresence>
 
-      <DashboardCharts key={refreshKey} />
-      <LogsTable key={refreshKey} />
+      {/* refreshSignal passed as prop — children re-fetch without remounting (no duplication) */}
+      <DashboardCharts refreshSignal={refreshSignal} />
+      <LogsTable refreshSignal={refreshSignal} />
       <SettingsForm />
     </div>
   );

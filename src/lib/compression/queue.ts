@@ -203,6 +203,24 @@ class CompressionQueue extends EventEmitter {
   removeSession(sessionId: string): void {
     this.sessionProgress.delete(sessionId);
   }
+
+  /**
+   * Estimate total bytes currently in-flight (processing + queued).
+   * Used for RAM back-pressure: each file being processed occupies
+   * roughly 3–5× its size in worker heap (Sharp decode buffers).
+   */
+  getInFlightBytes(): number {
+    let total = 0;
+    // Queued jobs not yet started
+    for (const pending of this.jobQueue) {
+      total += pending.job.originalSize ?? 0;
+    }
+    // Jobs currently being processed by workers
+    for (const [, pending] of this.busyWorkers) {
+      total += pending.job.originalSize ?? 0;
+    }
+    return total;
+  }
 }
 
 // Global singleton — survive Next.js HMR module reloads in dev mode by storing on globalThis.

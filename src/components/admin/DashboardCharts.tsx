@@ -79,7 +79,7 @@ function fmtHour(h: string): string {
   return `${day}/${time}`;
 }
 
-export default function DashboardCharts() {
+export default function DashboardCharts({ refreshSignal = 0 }: { refreshSignal?: number }) {
   const [stats, setStats] = useState<ChartStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('hourly');
@@ -113,8 +113,8 @@ export default function DashboardCharts() {
     }
   }, []);
 
-  useEffect(() => { fetchStats(); }, [fetchStats]);
-  useEffect(() => { if (showBreakdown) fetchDiskUsage(); }, [showBreakdown, fetchDiskUsage]);
+  useEffect(() => { fetchStats(); }, [fetchStats, refreshSignal]);
+  useEffect(() => { if (showBreakdown) fetchDiskUsage(); }, [showBreakdown, fetchDiskUsage, refreshSignal]);
 
   type TabData = Array<{ [key: string]: string | number }>;
   const tabMap: Record<Tab, { data: TabData; xKey: string; xFmt?: (v: string) => string; xLabel: string }> = {

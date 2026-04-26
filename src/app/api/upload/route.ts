@@ -58,18 +58,21 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // RAM back-pressure: if Node.js heap+external usage exceeds threshold, slow down new requests
+  // RAM back-pressure: check Sharp in-flight bytes vs admin-configured threshold.
+  // We estimate 4× file size in worker heap (Sharp decode+encode buffers).
+  // Framework heap (Next.js, SQLite, etc.) is NOT counted — only compression work.
   const maxRamMb = Number(getSetting('max_ram_mb')) || 512;
-  const mem = process.memoryUsage();
-  const usedMb = (mem.heapUsed + mem.external) / (1024 * 1024);
-  const ramPct = usedMb / maxRamMb;
+  const queue = getCompressionQueue();
+  const inFlightBytes = queue.getInFlightBytes();
+  const estimatedUsageMb = (inFlightBytes * 4) / (1024 * 1024);
+  const ramPct = estimatedUsageMb / maxRamMb;
   if (ramPct >= 0.90) {
     return NextResponse.json(
-      { error: 'سرور در حال پردازش درخواست‌های دیگر است. لطفاً ۳۰ ثانیه دیگر مجدداً امتحان کنید.', retryAfter: 30 },
+      { error: 'سرور در حال پردازش تعداد زیادی تصویر است. لطفاً ۳۰ ثانیه دیگر مجدداً امتحان کنید.', retryAfter: 30 },
       { status: 503, headers: { 'Retry-After': '30' } },
     );
   }
-  if (ramPct >= 0.80) {
+  if (ramPct >= 0.75) {
     return NextResponse.json(
       { error: 'سرور مشغول است. لطفاً ۱۵ ثانیه دیگر مجدداً امتحان کنید.', retryAfter: 15 },
       { status: 503, headers: { 'Retry-After': '15' } },
@@ -113,8 +116,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const sessionCompressDir = path.join(COMPRESSED_DIR, sessionId);
   fs.mkdirSync(sessionUploadDir, { recursive: true });
   fs.mkdirSync(sessionCompressDir, { recursive: true });
-
-  const queue = getCompressionQueue();
   const jobs: { jobId: string; filename: string }[] = [];
   let totalOriginalBytes = 0;
 
@@ -161,6 +162,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       status: 'queued',
       compressionLevel,
       outputFormat,
+      originalSize: buffer.length,
     };
 
     queue.enqueue(job).catch(() => { /* errors tracked in sessionProgress */ });
