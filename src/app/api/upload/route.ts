@@ -46,19 +46,45 @@ function parseUserAgent(ua: string): { deviceType: 'mobile' | 'desktop'; browser
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const startTime = Date.now();
   // Configurable per-IP rate limit (separate from middleware hard limit)
   const clientIp = getClientIp(req);
+  const ua = req.headers.get('user-agent') ?? 'unknown';
+
+  /** Log a rejected/failed upload attempt (no sessionId, success=false) */
+  function logRejected(reason: string, fileCount = 0, totalBytes = 0): void {
+    try {
+      if (getSetting('log_enabled') === '0') return;
+      const { deviceType, browser, os } = parseUserAgent(ua);
+      insertLog({
+        timestamp: new Date().toISOString(),
+        ipHash: hashValue(clientIp),
+        sessionId: `rejected-${uuidv4()}`,
+        fileCount,
+        totalOriginalBytes: totalBytes,
+        totalCompressedBytes: 0,
+        savingsPercent: 0,
+        userAgentHash: hashValue(ua),
+        durationMs: Date.now() - startTime,
+        success: false,
+        deviceType,
+        browser,
+        os,
+      });
+    } catch { /* logging must never block the response */ }
+  }
+
   const rl = uploadRateLimiter.check(clientIp);
   if (!rl.allowed) {
     const msg = getSetting('rate_limit_message') ?? 'تعداد درخواست‌های شما بیش از حد مجاز است. لطفاً کمی صبر کنید.';
     const retryAfter = rl.retryAfter ?? 60;
+    logRejected('rate_limit');
     return NextResponse.json(
       { error: `${msg} (${retryAfter} ثانیه دیگر دوباره امتحان کنید)`, retryAfter },
       { status: 429, headers: { 'Retry-After': String(retryAfter) } },
     );
   }
 
-  const startTime = Date.now();
   let formData: FormData;
   try {
     formData = await req.formData();
@@ -75,32 +101,47 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: `حداکثر تعداد فایل مجاز ${maxFiles} عدد است` }, { status: 400 });
   }
 
-  // RAM back-pressure: estimate Sharp worker memory for this batch + already in-flight.
-  // Sharp needs ~4× file size for decode + encode buffers per image.
-  // getInFlightBytes() includes: jobs in queue + jobs being processed + reservedBytes
-  // from other concurrent requests that passed this check but haven't enqueued yet.
+  // RAM back-pressure: two-signal approach (best practice)
+  //
+  // Signal 1 — process.memoryUsage().rss (Resident Set Size):
+  //   Actual physical RAM the OS has assigned to this process right now.
+  //   Includes Node.js heap + Sharp libvips buffers + everything else.
+  //   This is the ground-truth signal — if RSS is already high we reject.
+  //
+  // Signal 2 — getInFlightBytes() projected usage:
+  //   Bytes reserved by concurrent requests that passed the check + bytes
+  //   for jobs currently in the queue/workers. Multiplied by 4 (Sharp needs
+  //   ~4× the file size during decode+encode). Added on top of current RSS
+  //   to forecast whether accepting this batch would exceed max_ram_mb.
+  //
+  // Why both? RSS alone has latency (Sharp allocates lazily). Projection alone
+  // misses actual framework heap. Together they catch both cases.
   const maxRamMb = Number(getSetting('max_ram_mb')) || 512;
   const queue = getCompressionQueue();
-  const inFlightBytes = queue.getInFlightBytes();
   const newBatchBytes = files.reduce((sum, f) => sum + f.size, 0);
-  const estimatedMb = ((inFlightBytes + newBatchBytes) * 4) / (1024 * 1024);
-  const ramPct = estimatedMb / maxRamMb;
-  if (ramPct >= 1.0) {
+  const currentRssMb = process.memoryUsage().rss / (1024 * 1024);
+  const inFlightMb = (queue.getInFlightBytes() * 4) / (1024 * 1024);
+  const projectedMb = currentRssMb + (newBatchBytes * 4) / (1024 * 1024);
+
+  if (currentRssMb + inFlightMb >= maxRamMb * 0.90) {
+    // Server is already heavily loaded — hard reject
+    logRejected('ram_overload', files.length, files.reduce((s, f) => s + f.size, 0));
     return NextResponse.json(
       { error: 'سرور در حال حاضر پر از کار است. لطفاً ۳۰ ثانیه دیگر امتحان کنید.', retryAfter: 30 },
       { status: 503, headers: { 'Retry-After': '30' } },
     );
   }
-  if (ramPct >= 0.80) {
+  if (projectedMb >= maxRamMb * 0.90) {
+    // Adding this batch would exceed threshold — soft reject
+    logRejected('ram_would_exceed', files.length, files.reduce((s, f) => s + f.size, 0));
     return NextResponse.json(
       { error: 'سرور مشغول است. لطفاً ۱۵ ثانیه دیگر امتحان کنید.', retryAfter: 15 },
       { status: 503, headers: { 'Retry-After': '15' } },
     );
   }
 
-  // Atomically reserve capacity for this batch.
-  // No await between the checks above and this call — Node.js single-thread model
-  // guarantees no other request can interleave here, closing the TOCTOU race.
+  // Atomically reserve capacity for this batch before any await.
+  // No other request can interleave between check and reserve (Node.js single-thread).
   queue.reserveBytes(newBatchBytes);
   try {
 
@@ -180,14 +221,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // Log the upload event (OWASP A09) — only if logging is enabled
   const logEnabled = getSetting('log_enabled') !== '0';
   if (logEnabled) {
-  const ip = clientIp;
-  const ua = req.headers.get('user-agent') ?? 'unknown';
   const { deviceType, browser, os } = parseUserAgent(ua);
   try {
     const timestamp = new Date().toISOString();
     insertLog({
       timestamp,
-      ipHash: hashValue(ip),
+      ipHash: hashValue(clientIp),
       sessionId,
       fileCount: jobs.length,
       totalOriginalBytes,
@@ -200,7 +239,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       browser,
       os,
     });
-    logUpload({ sessionId, fileCount: jobs.length, totalSizeBytes: totalOriginalBytes, ipHash: hashValue(ip) });
+    logUpload({ sessionId, fileCount: jobs.length, totalSizeBytes: totalOriginalBytes, ipHash: hashValue(clientIp) });
   } catch {
     // logging failure must never break the upload response
   }

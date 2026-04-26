@@ -64,6 +64,50 @@ function AreaTooltip({
   );
 }
 
+function PieTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ name: string; value: number; payload: { fill?: string } }>;
+}) {
+  if (!active || !payload?.length) return null;
+  const item = payload[0];
+  return (
+    <div
+      className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 shadow-xl text-sm"
+      style={{ color: '#e2e8f0' }}
+    >
+      <span className="font-medium" style={{ color: item.payload?.fill ?? '#14b8a6' }}>
+        {item.name}
+      </span>
+      <span className="text-slate-300 mr-2">{item.value}</span>
+    </div>
+  );
+}
+
+function PieTooltipMB({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ name: string; value: number; payload: { fill?: string } }>;
+}) {
+  if (!active || !payload?.length) return null;
+  const item = payload[0];
+  return (
+    <div
+      className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 shadow-xl text-sm"
+      style={{ color: '#e2e8f0' }}
+    >
+      <span className="font-medium" style={{ color: item.payload?.fill ?? '#14b8a6' }}>
+        {item.name}
+      </span>
+      <span className="text-slate-300 mr-2">{item.value} MB</span>
+    </div>
+  );
+}
+
 function Skel({ cls }: { cls?: string }) {
   return <div className={`animate-pulse bg-slate-800/80 rounded-lg ${cls ?? ''}`} />;
 }
@@ -328,15 +372,7 @@ export default function DashboardCharts({ refreshSignal = 0 }: { refreshSignal?:
                               iconSize={7}
                               formatter={(v) => <span style={{ color: '#94a3b8', fontSize: 12 }}>{v}</span>}
                             />
-                            <Tooltip
-                              contentStyle={{
-                                background: '#0f172a',
-                                border: '1px solid #1e293b',
-                                borderRadius: '8px',
-                                fontSize: 12,
-                                color: '#e2e8f0',
-                              }}
-                            />
+                            <Tooltip content={<PieTooltip />} />
                           </PieChart>
                         </ResponsiveContainer>
                       )}
@@ -388,10 +424,7 @@ export default function DashboardCharts({ refreshSignal = 0 }: { refreshSignal?:
                               iconSize={7}
                               formatter={(v) => <span style={{ color: '#94a3b8', fontSize: 12 }}>{v}</span>}
                             />
-                            <Tooltip
-                              contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', fontSize: 12, color: '#e2e8f0' }}
-                              formatter={(v: number) => [`${v} MB`]}
-                            />
+                            <Tooltip content={<PieTooltipMB />} />
                           </PieChart>
                         </ResponsiveContainer>
                         <div className="text-center pb-3">

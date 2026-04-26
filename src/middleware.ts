@@ -76,21 +76,30 @@ export function middleware(request: NextRequest) {
     request.headers.get('x-real-ip') ??
     'unknown';
 
-  // Rate limit — stricter for admin routes
+  // Rate limit strategy:
+  // - /api/admin/* + /admin/*: strict limit (20/min) — brute force protection
+  // - /api/upload: SKIP here — upload/route.ts has its own uploadRateLimiter
+  //   that is tuned for upload traffic and avoids double-counting
+  // - /api/progress, /api/download: light limit (API_MAX/min) — streaming endpoints
+  // - All other /api/*: API_MAX/min
   const isAdmin = pathname.startsWith('/api/admin') || pathname.startsWith('/admin');
-  const rateLimitKey = `${isAdmin ? 'admin' : 'api'}:${ip}`;
-  const { allowed, retryAfter } = isAdmin
-    ? checkRate(rateLimitKey, ADMIN_MAX, ADMIN_WINDOW)
-    : checkRate(rateLimitKey, API_MAX, API_WINDOW);
+  const isUpload = pathname === '/api/upload' || pathname.startsWith('/api/upload/');
 
-  if (!allowed) {
-    return new NextResponse(JSON.stringify({ error: 'تعداد درخواست‌ها بیش از حد مجاز است' }), {
-      status: 429,
-      headers: {
-        'Content-Type': 'application/json',
-        'Retry-After': String(retryAfter ?? 60),
-      },
-    });
+  if (!isUpload) {
+    const rateLimitKey = `${isAdmin ? 'admin' : 'api'}:${ip}`;
+    const { allowed, retryAfter } = isAdmin
+      ? checkRate(rateLimitKey, ADMIN_MAX, ADMIN_WINDOW)
+      : checkRate(rateLimitKey, API_MAX, API_WINDOW);
+
+    if (!allowed) {
+      return new NextResponse(JSON.stringify({ error: 'تعداد درخواست‌ها بیش از حد مجاز است' }), {
+        status: 429,
+        headers: {
+          'Content-Type': 'application/json',
+          'Retry-After': String(retryAfter ?? 60),
+        },
+      });
+    }
   }
 
   // Add security headers to response
