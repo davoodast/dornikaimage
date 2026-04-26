@@ -334,6 +334,7 @@ export default function DashboardCharts({ refreshSignal = 0 }: { refreshSignal?:
                                 border: '1px solid #1e293b',
                                 borderRadius: '8px',
                                 fontSize: 12,
+                                color: '#e2e8f0',
                               }}
                             />
                           </PieChart>
@@ -388,7 +389,7 @@ export default function DashboardCharts({ refreshSignal = 0 }: { refreshSignal?:
                               formatter={(v) => <span style={{ color: '#94a3b8', fontSize: 12 }}>{v}</span>}
                             />
                             <Tooltip
-                              contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', fontSize: 12 }}
+                              contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', fontSize: 12, color: '#e2e8f0' }}
                               formatter={(v: number) => [`${v} MB`]}
                             />
                           </PieChart>

@@ -33,6 +33,15 @@ class CompressionQueue extends EventEmitter {
   private readonly busyWorkers: Map<Worker, PendingJob> = new Map();
   private readonly jobQueue: PendingJob[] = [];
 
+  /**
+   * Bytes reserved (but not yet enqueued) by concurrent upload requests.
+   * Incremented synchronously right after the RAM check passes, decremented
+   * synchronously once all jobs for that request have been enqueued.
+   * Because Node.js is single-threaded, there is no await between check and
+   * reserve, so this closes the TOCTOU race between concurrent requests.
+   */
+  private reservedBytes = 0;
+
   /** sessionId → Map<jobId, progress> */
   readonly sessionProgress: Map<string, Map<string, JobProgress>> = new Map();
 
@@ -208,9 +217,11 @@ class CompressionQueue extends EventEmitter {
    * Estimate total bytes currently in-flight (processing + queued).
    * Used for RAM back-pressure: each file being processed occupies
    * roughly 3–5× its size in worker heap (Sharp decode buffers).
+   * Also includes reservedBytes from requests that passed the check
+   * but have not yet enqueued their jobs.
    */
   getInFlightBytes(): number {
-    let total = 0;
+    let total = this.reservedBytes;
     // Queued jobs not yet started
     for (const pending of this.jobQueue) {
       total += pending.job.originalSize ?? 0;
@@ -220,6 +231,23 @@ class CompressionQueue extends EventEmitter {
       total += pending.job.originalSize ?? 0;
     }
     return total;
+  }
+
+  /**
+   * Reserve bytes for an incoming batch atomically (before enqueueing jobs).
+   * Must be called synchronously right after the RAM check passes so that
+   * concurrent requests see the reserved capacity in getInFlightBytes().
+   */
+  reserveBytes(n: number): void {
+    this.reservedBytes += n;
+  }
+
+  /**
+   * Release a prior reservation once all jobs for that batch are enqueued
+   * (or on error path) so the slot is freed for subsequent requests.
+   */
+  releaseReservedBytes(n: number): void {
+    this.reservedBytes = Math.max(0, this.reservedBytes - n);
   }
 }
 

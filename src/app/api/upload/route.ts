@@ -77,8 +77,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   // RAM back-pressure: estimate Sharp worker memory for this batch + already in-flight.
   // Sharp needs ~4× file size for decode + encode buffers per image.
-  // File.size is the original file size (no buffer allocated yet — cheap to read).
-  // This correctly blocks even a single large upload when max_ram_mb is small.
+  // getInFlightBytes() includes: jobs in queue + jobs being processed + reservedBytes
+  // from other concurrent requests that passed this check but haven't enqueued yet.
   const maxRamMb = Number(getSetting('max_ram_mb')) || 512;
   const queue = getCompressionQueue();
   const inFlightBytes = queue.getInFlightBytes();
@@ -86,18 +86,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const estimatedMb = ((inFlightBytes + newBatchBytes) * 4) / (1024 * 1024);
   const ramPct = estimatedMb / maxRamMb;
   if (ramPct >= 1.0) {
-    const wait = inFlightBytes > 0 ? 30 : 15;
     return NextResponse.json(
-      { error: `سرور ظرفیت ندارد (تخمین مصرف RAM: ${Math.round(estimatedMb)} MB از ${maxRamMb} MB). لطفاً ${wait} ثانیه دیگر امتحان کنید.`, retryAfter: wait },
-      { status: 503, headers: { 'Retry-After': String(wait) } },
+      { error: 'سرور در حال حاضر پر از کار است. لطفاً ۳۰ ثانیه دیگر امتحان کنید.', retryAfter: 30 },
+      { status: 503, headers: { 'Retry-After': '30' } },
     );
   }
   if (ramPct >= 0.80) {
     return NextResponse.json(
-      { error: `سرور مشغول است (تخمین: ${Math.round(estimatedMb)} MB از ${maxRamMb} MB). لطفاً ۱۵ ثانیه دیگر امتحان کنید.`, retryAfter: 15 },
+      { error: 'سرور مشغول است. لطفاً ۱۵ ثانیه دیگر امتحان کنید.', retryAfter: 15 },
       { status: 503, headers: { 'Retry-After': '15' } },
     );
   }
+
+  // Atomically reserve capacity for this batch.
+  // No await between the checks above and this call — Node.js single-thread model
+  // guarantees no other request can interleave here, closing the TOCTOU race.
+  queue.reserveBytes(newBatchBytes);
+  try {
 
   // Read and validate compressionLevel (OWASP A03: whitelist validation)
   const rawLevel = formData.get('compressionLevel');
@@ -202,4 +207,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   } // end logEnabled check
 
   return NextResponse.json({ sessionId, jobs }, { status: 202 });
+  } finally {
+    // Release the byte reservation — jobs are now tracked in the queue via
+    // originalSize, so their bytes are counted in getInFlightBytes() independently.
+    queue.releaseReservedBytes(newBatchBytes);
+  }
 }
