@@ -22,7 +22,7 @@ export default function SettingsForm() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('content');
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
   const [mobileTabOpen, setMobileTabOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 

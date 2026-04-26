@@ -51,10 +51,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const rl = uploadRateLimiter.check(clientIp);
   if (!rl.allowed) {
     const msg = getSetting('rate_limit_message') ?? 'تعداد درخواست‌های شما بیش از حد مجاز است. لطفاً کمی صبر کنید.';
-    return NextResponse.json({ error: msg }, {
-      status: 429,
-      headers: { 'Retry-After': String(rl.retryAfter ?? 60) },
-    });
+    const retryAfter = rl.retryAfter ?? 60;
+    return NextResponse.json(
+      { error: `${msg} (${retryAfter} ثانیه دیگر دوباره امتحان کنید)`, retryAfter },
+      { status: 429, headers: { 'Retry-After': String(retryAfter) } },
+    );
   }
 
   const startTime = Date.now();
@@ -80,6 +81,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     typeof rawLevel === 'string' && VALID_COMPRESSION_LEVELS.includes(rawLevel as CompressionLevel)
       ? (rawLevel as CompressionLevel)
       : 'balanced';
+
+  // outputFormat is passed by the client from publicSettings (which reads from DB).
+  // This avoids any module-isolation issue with DB singletons in dev mode.
+  const rawOutputFormat = formData.get('outputFormat');
+  const outputFormat: 'webp' | 'jpeg' =
+    rawOutputFormat === 'jpeg' ? 'jpeg' : 'webp';
 
   const sessionId = uuidv4();
   const sessionUploadDir = path.join(UPLOADS_DIR, sessionId);
@@ -133,7 +140,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       format: detectedFormat,
       status: 'queued',
       compressionLevel,
-      outputFormat: (getSetting('output_format') ?? 'webp') as 'webp' | 'jpeg',
+      outputFormat,
     };
 
     queue.enqueue(job).catch(() => { /* errors tracked in sessionProgress */ });

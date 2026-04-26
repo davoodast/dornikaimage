@@ -27,5 +27,6 @@ export async function GET(request: NextRequest) {
     cleanup_interval_ms: s.cleanup_interval_ms,
     max_file_size_mb: s.max_file_size_mb,
     max_files_per_upload: s.max_files_per_upload,
+    output_format: s.output_format,
   });
 }

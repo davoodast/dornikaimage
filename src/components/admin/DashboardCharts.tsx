@@ -83,7 +83,7 @@ export default function DashboardCharts() {
   const [stats, setStats] = useState<ChartStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('hourly');
-  const [showBreakdown, setShowBreakdown] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState(true);
   const [diskUsage, setDiskUsage] = useState<DiskUsage | null>(null);
   const [diskLoading, setDiskLoading] = useState(false);
 
@@ -343,7 +343,7 @@ export default function DashboardCharts() {
                   </div>
                 ))}
 
-                {/* Disk usage card */}
+                {/* Disk usage card — donut */}
                 <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                   <div className="px-5 py-3 border-b border-slate-800 flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-slate-100">{'فضای اشغالی تصاویر'}</h3>
@@ -359,54 +359,47 @@ export default function DashboardCharts() {
                       </svg>
                     </button>
                   </div>
-                  <div className="px-5 py-4 space-y-4">
+                  <div className="flex justify-center py-4">
                     {diskLoading ? (
-                      <>
-                        <Skel cls="h-6 w-28 mb-1" />
-                        <Skel cls="h-2 w-full" />
-                        <Skel cls="h-2 w-3/4" />
-                      </>
+                      <Skel cls="h-48 w-full mx-4" />
                     ) : diskUsage ? (
-                      <>
-                        <div>
-                          <div className="text-2xl font-bold tabular-nums text-teal-400">
-                            {diskUsage.totalMB} MB
-                          </div>
-                          <div className="text-xs text-slate-500 mt-0.5">{'مجموع فضای اشغالی'}</div>
-                        </div>
-
-                        {/* Uploads bar */}
-                        <div>
-                          <div className="flex justify-between text-xs mb-1.5">
-                            <span className="text-slate-400">{'آپلودهای اصلی'}</span>
-                            <span className="text-indigo-400 font-mono">{diskUsage.uploadsMB} MB</span>
-                          </div>
-                          <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-indigo-500 rounded-full transition-all duration-500"
-                              style={{ width: diskUsage.totalMB > 0 ? `${Math.min(100, (diskUsage.uploadsMB / diskUsage.totalMB) * 100)}%` : '0%' }}
+                      <div className="w-full">
+                        <ResponsiveContainer width="100%" height={190}>
+                          <PieChart>
+                            <Pie
+                              data={[
+                                { name: 'آپلودهای اصلی', value: diskUsage.uploadsMB },
+                                { name: 'خروجی فشرده', value: diskUsage.compressedMB },
+                              ]}
+                              dataKey="value"
+                              nameKey="name"
+                              cx="50%"
+                              cy="45%"
+                              innerRadius={48}
+                              outerRadius={72}
+                              paddingAngle={3}
+                            >
+                              <Cell fill="#6366f1" />
+                              <Cell fill="#14b8a6" />
+                            </Pie>
+                            <Legend
+                              iconType="circle"
+                              iconSize={7}
+                              formatter={(v) => <span style={{ color: '#94a3b8', fontSize: 12 }}>{v}</span>}
                             />
-                          </div>
-                          <div className="text-xs text-slate-600 mt-1">{diskUsage.uploadSessions} {' پوشه جلسه'}</div>
-                        </div>
-
-                        {/* Compressed bar */}
-                        <div>
-                          <div className="flex justify-between text-xs mb-1.5">
-                            <span className="text-slate-400">{'خروجی فشرده‌شده'}</span>
-                            <span className="text-teal-400 font-mono">{diskUsage.compressedMB} MB</span>
-                          </div>
-                          <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-teal-500 rounded-full transition-all duration-500"
-                              style={{ width: diskUsage.totalMB > 0 ? `${Math.min(100, (diskUsage.compressedMB / diskUsage.totalMB) * 100)}%` : '0%' }}
+                            <Tooltip
+                              contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', fontSize: 12 }}
+                              formatter={(v: number) => [`${v} MB`]}
                             />
-                          </div>
-                          <div className="text-xs text-slate-600 mt-1">{diskUsage.compressedSessions} {' پوشه جلسه'}</div>
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <div className="text-center pb-3">
+                          <div className="text-xl font-bold tabular-nums text-teal-400">{diskUsage.totalMB} MB</div>
+                          <div className="text-xs text-slate-500">{'مجموع فضای اشغالی'}</div>
                         </div>
-                      </>
+                      </div>
                     ) : (
-                      <p className="text-slate-500 text-sm text-center py-6">{'داده‌ای وجود ندارد'}</p>
+                      <p className="h-48 flex items-center text-slate-500 text-sm">{'داده‌ای وجود ندارد'}</p>
                     )}
                   </div>
                 </div>

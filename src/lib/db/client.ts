@@ -347,6 +347,14 @@ export function updateLogSavings(
   `).run(totalCompressedBytes, savingsPercent, sessionId);
 }
 
+export function updateLogSuccess(sessionId: string, success: boolean): void {
+  const db = getDb();
+  db.prepare(`
+    UPDATE logs SET success = ?
+    WHERE id = (SELECT id FROM logs WHERE session_id = ? ORDER BY created_at DESC LIMIT 1)
+  `).run(success ? 1 : 0, sessionId);
+}
+
 // ─── Settings helpers ─────────────────────────────────────────
 
 export function getSetting(key: string): string | null {

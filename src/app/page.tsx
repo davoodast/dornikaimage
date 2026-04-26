@@ -20,6 +20,7 @@ interface PublicSettings {
   cleanup_interval_ms: number;
   max_file_size_mb: number;
   max_files_per_upload: number;
+  output_format: 'webp' | 'jpeg';
 }
 
 const DEFAULT_SETTINGS: PublicSettings = {
@@ -33,6 +34,7 @@ const DEFAULT_SETTINGS: PublicSettings = {
   cleanup_interval_ms: 3600000,
   max_file_size_mb: 20,
   max_files_per_upload: 50,
+  output_format: 'webp',
 };
 
 interface UploadedJob {
@@ -108,6 +110,7 @@ export default function Home() {
     const formData = new FormData();
     for (const file of pendingFiles) formData.append('files', file);
     formData.append('compressionLevel', compressionLevel);
+    formData.append('outputFormat', publicSettings.output_format);
     try {
       setUploadProgress(30);
       const res = await fetch('/api/upload', { method: 'POST', body: formData });

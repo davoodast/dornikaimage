@@ -6,7 +6,7 @@
 import { NextRequest } from 'next/server';
 import { uuidSchema } from '@/lib/security/validate';
 import { getCompressionQueue } from '@/lib/compression/queue';
-import { updateLogSavings, getSetting } from '@/lib/db/client';
+import { updateLogSavings, updateLogSuccess, getSetting } from '@/lib/db/client';
 import type { JobProgress } from '@/types';
 
 const SSE_TIMEOUT_MS = 30_000;
@@ -47,7 +47,7 @@ export async function GET(req: NextRequest): Promise<Response> {
         send({ type: 'progress', progress });
         if (queue.isSessionComplete(parsed.data)) {
           send({ type: 'done' });
-          // Update log with actual compression savings
+          // Update log with actual compression savings + mark success/failure
           try {
             if (getSetting('log_enabled') !== '0') {
               const allJobs = queue.getSessionProgress(parsed.data);
@@ -57,6 +57,11 @@ export async function GET(req: NextRequest): Promise<Response> {
                 ? Math.round(((totalOriginal - totalCompressed) / totalOriginal) * 100)
                 : 0;
               updateLogSavings(parsed.data, totalCompressed, pct);
+              // Mark as failed if ANY job errored
+              const hasErrors = allJobs.some((j) => j.status === 'error');
+              if (hasErrors) {
+                updateLogSuccess(parsed.data, false);
+              }
             }
           } catch { /* log update failure must not break SSE */ }
           cleanup();
@@ -69,6 +74,12 @@ export async function GET(req: NextRequest): Promise<Response> {
       // Timeout safety valve
       const timer = setTimeout(() => {
         send({ type: 'timeout' });
+        // Mark session as failed in log on timeout
+        try {
+          if (getSetting('log_enabled') !== '0') {
+            updateLogSuccess(parsed.data, false);
+          }
+        } catch { /* safe */ }
         cleanup();
         controller.close();
       }, SSE_TIMEOUT_MS);

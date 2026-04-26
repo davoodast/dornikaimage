@@ -9,12 +9,16 @@ import path from 'path';
 import fs from 'fs';
 import { getCompressionQueue } from '@/lib/compression/queue';
 import { logCleanup } from '@/lib/logger/winston';
+import { getSetting } from '@/lib/db/client';
 
 const UPLOADS_DIR = path.resolve(process.cwd(), 'uploads');
 const COMPRESSED_DIR = path.resolve(process.cwd(), 'compressed');
 
 function getCleanupIntervalMs(): number {
-  return Number(process.env.CLEANUP_INTERVAL_MS) || 3_600_000; // default 1 hour
+  // Read from DB first (admin-configurable), then env var, then default 1 hour
+  const fromDb = Number(getSetting('cleanup_interval_ms'));
+  if (fromDb > 0) return fromDb;
+  return Number(process.env.CLEANUP_INTERVAL_MS) || 3_600_000;
 }
 
 function removeOldSessions(baseDir: string, maxAgeMs: number, queue: ReturnType<typeof getCompressionQueue>): void {
