@@ -23,40 +23,51 @@ export async function GET(req: NextRequest): Promise<Response> {
   }
 
   const queue = getCompressionQueue();
-  const jobs = queue.getSessionProgress(sessionId).filter((j) => j.status === 'done');
+  const sessionDir = path.join(COMPRESSED_DIR, sessionId);
 
-  if (jobs.length === 0) {
-    return NextResponse.json({ error: 'هیچ فایل آماده‌ای یافت نشد' }, { status: 404 });
+  // Try to get jobs from in-memory queue first (session may still be there)
+  const queueJobs = queue.getSessionProgress(sessionId).filter((j) => j.status === 'done');
+
+  // If session was removed from queue (happens after SSE closes), fall back to disk scan.
+  // Files are still on disk until cleanup scheduler runs.
+  type ArchiveEntry = { filePath: string; name: string };
+  let entries: ArchiveEntry[];
+
+  if (queueJobs.length > 0) {
+    entries = queueJobs.flatMap((job) => {
+      let fp = path.join(sessionDir, `${job.jobId}_${job.filename}`);
+      try { assertPathWithin(fp, COMPRESSED_DIR); } catch { return []; }
+      if (!fs.existsSync(fp) && fs.existsSync(sessionDir)) {
+        const found = fs.readdirSync(sessionDir).find((f) => f.startsWith(`${job.jobId}_`));
+        if (found) {
+          const c = path.join(sessionDir, found);
+          try { assertPathWithin(c, COMPRESSED_DIR); fp = c; } catch { return []; }
+        }
+      }
+      return fs.existsSync(fp) ? [{ filePath: fp, name: job.filename }] : [];
+    });
+  } else if (fs.existsSync(sessionDir)) {
+    // Disk-only fallback: serve every file in the session's compressed dir
+    entries = fs.readdirSync(sessionDir).flatMap((f) => {
+      const fp = path.join(sessionDir, f);
+      try { assertPathWithin(fp, COMPRESSED_DIR); } catch { return []; }
+      // Strip leading jobId_ prefix to get display name: "uuid_filename.webp" → "filename.webp"
+      const name = f.replace(/^[0-9a-f-]{36}_/i, '');
+      return fs.statSync(fp).isFile() ? [{ filePath: fp, name }] : [];
+    });
+  } else {
+    entries = [];
   }
 
-  const sessionDir = path.join(COMPRESSED_DIR, sessionId);
+  if (entries.length === 0) {
+    return NextResponse.json({ error: 'هیچ فایل آماده‌ای یافت نشد' }, { status: 404 });
+  }
 
   // Create ZIP archive in memory with streaming
   const archive = archiver('zip', { zlib: { level: 0 } }); // no re-compression
 
-  for (const job of jobs) {
-    let filePath = path.join(sessionDir, `${job.jobId}_${job.filename}`);
-    try {
-      assertPathWithin(filePath, COMPRESSED_DIR);
-    } catch {
-      continue;
-    }
-    // Fallback: scan directory for file starting with jobId_ if exact path not found
-    if (!fs.existsSync(filePath) && fs.existsSync(sessionDir)) {
-      const found = fs.readdirSync(sessionDir).find((f) => f.startsWith(`${job.jobId}_`));
-      if (found) {
-        const candidate = path.join(sessionDir, found);
-        try {
-          assertPathWithin(candidate, COMPRESSED_DIR);
-          filePath = candidate;
-        } catch {
-          continue;
-        }
-      }
-    }
-    if (fs.existsSync(filePath)) {
-      archive.file(filePath, { name: job.filename });
-    }
+  for (const entry of entries) {
+    archive.file(entry.filePath, { name: entry.name });
   }
 
   archive.finalize();

@@ -28,45 +28,51 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const jobs = queue.getSessionProgress(sessionId);
   const job = jobs.find((j) => j.jobId === jobId);
 
-  if (!job) {
-    return NextResponse.json({ error: 'کار پیدا نشد' }, { status: 404 });
-  }
-  if (job.status !== 'done') {
+  // If the job is not found in memory (session was removed from queue after SSE closed)
+  // fall through to disk-only path below — files are still on disk until the cleanup scheduler runs.
+  if (job && job.status !== 'done') {
     return NextResponse.json({ error: 'فایل هنوز آماده نیست' }, { status: 409 });
   }
 
-  // Reconstruct output path deterministically using the filename stored in sessionProgress.
-  // job.filename is updated to the .webp output name when compression completes.
-  let filePath = path.join(COMPRESSED_DIR, sessionId, `${jobId}_${job.filename}`);
+  const sessionDir = path.join(COMPRESSED_DIR, sessionId);
 
-  // Safety: verify path is within compressed dir
-  try {
-    assertPathWithin(filePath, COMPRESSED_DIR);
-  } catch {
-    return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 });
+  // Determine file path:
+  // 1. If job is in memory → reconstruct deterministic path using stored filename
+  // 2. If job is NOT in memory (session GC'd) → scan disk for jobId_ prefix
+  let filePath: string | null = null;
+
+  if (job) {
+    const candidate = path.join(sessionDir, `${jobId}_${job.filename}`);
+    try {
+      assertPathWithin(candidate, COMPRESSED_DIR);
+      if (fs.existsSync(candidate)) {
+        filePath = candidate;
+      }
+    } catch {
+      return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 });
+    }
   }
 
-  // If the exact path is not found, scan the session dir for a file starting with jobId_
-  // This handles edge cases where the filename in sessionProgress differs from disk.
-  if (!fs.existsSync(filePath)) {
-    const sessionDir = path.join(COMPRESSED_DIR, sessionId);
-    if (fs.existsSync(sessionDir)) {
-      const found = fs.readdirSync(sessionDir).find((f) => f.startsWith(`${jobId}_`));
-      if (found) {
-        const candidate = path.join(sessionDir, found);
-        try {
-          assertPathWithin(candidate, COMPRESSED_DIR);
-          filePath = candidate;
-        } catch {
-          return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 });
-        }
+  // Fallback: scan disk (works even when session was removed from memory)
+  if (!filePath && fs.existsSync(sessionDir)) {
+    const found = fs.readdirSync(sessionDir).find((f) => f.startsWith(`${jobId}_`));
+    if (found) {
+      const candidate = path.join(sessionDir, found);
+      try {
+        assertPathWithin(candidate, COMPRESSED_DIR);
+        filePath = candidate;
+      } catch {
+        return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 });
       }
     }
   }
 
-  if (!fs.existsSync(filePath)) {
+  if (!filePath) {
     return NextResponse.json({ error: 'فایل یافت نشد' }, { status: 404 });
   }
+
+  // Derive display filename: use queue job.filename if available, else extract from file on disk
+  const displayFilename = job?.filename ?? path.basename(filePath).replace(/^[^_]+_/, '');
 
   const fileBuffer = fs.readFileSync(filePath);
   logDownload({ sessionId, jobId });
@@ -74,7 +80,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     status: 200,
     headers: {
       'Content-Type': 'application/octet-stream',
-      'Content-Disposition': `attachment; filename="${encodeURIComponent(job.filename)}"`,
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(displayFilename)}"`,
       'Cache-Control': 'no-store',
     },
   });
