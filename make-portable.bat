@@ -120,6 +120,11 @@ if not exist "%OUTDIR%\uploads"    mkdir "%OUTDIR%\uploads"
 if not exist "%OUTDIR%\compressed" mkdir "%OUTDIR%\compressed"
 if not exist "%OUTDIR%\logs"       mkdir "%OUTDIR%\logs"
 
+echo       [4h] Patch prerender manifest for dynamic home settings...
+if exist "%OUTDIR%\.next\prerender-manifest.json" (
+    powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$f='%OUTDIR%\\.next\\prerender-manifest.json'; $j=Get-Content -Raw -Path $f | ConvertFrom-Json; if ($j.routes.PSObject.Properties.Name -contains '/') { $j.routes.PSObject.Properties.Remove('/'); [System.IO.File]::WriteAllText($f, ($j | ConvertTo-Json -Depth 100 -Compress), (New-Object System.Text.UTF8Encoding($false))); Write-Host '[info] home route removed from prerender manifest'; } else { Write-Host '[info] home route already dynamic'; }"
+)
+
 :: ---- [5/6] Write start.bat ----
 echo [5/6] Writing start.bat and stop.bat...
 
