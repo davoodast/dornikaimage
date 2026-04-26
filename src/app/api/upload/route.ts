@@ -58,6 +58,24 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
+  // RAM back-pressure: if Node.js heap+external usage exceeds threshold, slow down new requests
+  const maxRamMb = Number(getSetting('max_ram_mb')) || 512;
+  const mem = process.memoryUsage();
+  const usedMb = (mem.heapUsed + mem.external) / (1024 * 1024);
+  const ramPct = usedMb / maxRamMb;
+  if (ramPct >= 0.90) {
+    return NextResponse.json(
+      { error: 'سرور در حال پردازش درخواست‌های دیگر است. لطفاً ۳۰ ثانیه دیگر مجدداً امتحان کنید.', retryAfter: 30 },
+      { status: 503, headers: { 'Retry-After': '30' } },
+    );
+  }
+  if (ramPct >= 0.80) {
+    return NextResponse.json(
+      { error: 'سرور مشغول است. لطفاً ۱۵ ثانیه دیگر مجدداً امتحان کنید.', retryAfter: 15 },
+      { status: 503, headers: { 'Retry-After': '15' } },
+    );
+  }
+
   const startTime = Date.now();
   let formData: FormData;
   try {
@@ -85,8 +103,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // outputFormat is passed by the client from publicSettings (which reads from DB).
   // This avoids any module-isolation issue with DB singletons in dev mode.
   const rawOutputFormat = formData.get('outputFormat');
-  const outputFormat: 'webp' | 'jpeg' =
-    rawOutputFormat === 'jpeg' ? 'jpeg' : 'webp';
+  const outputFormat: 'webp' | 'jpeg' | 'original' =
+    rawOutputFormat === 'jpeg' ? 'jpeg' :
+    rawOutputFormat === 'original' ? 'original' :
+    'webp';
 
   const sessionId = uuidv4();
   const sessionUploadDir = path.join(UPLOADS_DIR, sessionId);

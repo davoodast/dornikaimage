@@ -54,6 +54,7 @@ export default function SettingsForm() {
       if (form.max_file_size_mb != null) body.max_file_size_mb = Number(form.max_file_size_mb);
       if (form.max_files_per_upload != null) body.max_files_per_upload = Number(form.max_files_per_upload);
       if (form.output_format != null) body.output_format = form.output_format;
+      if (form.max_ram_mb != null) body.max_ram_mb = Number(form.max_ram_mb);
       if (form.rate_limit_requests != null) body.rate_limit_requests = Number(form.rate_limit_requests);
       if (form.rate_limit_window_ms != null) body.rate_limit_window_ms = Number(form.rate_limit_window_ms);
       if (form.rate_limit_message != null) body.rate_limit_message = form.rate_limit_message;
@@ -363,7 +364,32 @@ export default function SettingsForm() {
             >
               <option value="webp">{'WebP (توصیه‌ شده — فشرده‌ترین)'}</option>
               <option value="jpeg">{'JPEG (سازگاری بیشتر)'}</option>
+              <option value="user_choice">{'انتخاب توسط کاربر (نمایش دکمه قبل آپلود)'}</option>
             </select>
+          </div>
+          <div>
+            <label className={labelCls}>
+              حداکثر RAM تخصیص‌یافته به پروژه
+              <span className="text-slate-500 mr-2">
+                ({form.max_ram_mb ?? settings?.max_ram_mb ?? 512} MB)
+              </span>
+            </label>
+            <input
+              type="range"
+              min={128}
+              max={4096}
+              step={128}
+              value={form.max_ram_mb ?? settings?.max_ram_mb ?? 512}
+              onChange={(e) => setForm((f) => ({ ...f, max_ram_mb: Number(e.target.value) }))}
+              className="w-full accent-teal-500"
+            />
+            <div className="flex justify-between text-xs text-slate-600 mt-1">
+              <span>128 MB</span>
+              <span>4096 MB</span>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              وقتی RAM بیشتر از ۸۰٪ این مقدار استفاده شود، درخواست‌های جدید به تأخیر می‌افتند
+            </p>
           </div>
           <div>
             <label className={labelCls}>{'حداکثر درخواست در بازه زمانی'}</label>

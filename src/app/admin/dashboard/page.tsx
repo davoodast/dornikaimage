@@ -1,10 +1,8 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { verifyToken } from '@/lib/auth/jwt';
-import LogsTable from '@/components/admin/LogsTable';
-import SettingsForm from '@/components/admin/SettingsForm';
 import LogoutButton from '@/components/admin/LogoutButton';
-import DashboardCharts from '@/components/admin/DashboardCharts';
+import DashboardContent from '@/components/admin/DashboardContent';
 
 export default async function AdminDashboardPage() {
   const cookieStore = cookies();
@@ -40,10 +38,8 @@ export default async function AdminDashboardPage() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto p-3 sm:p-6 space-y-4 sm:space-y-8">
-        <DashboardCharts />
-        <LogsTable />
-        <SettingsForm />
+      <div className="max-w-7xl mx-auto p-3 sm:p-6">
+        <DashboardContent />
       </div>
     </main>
   );

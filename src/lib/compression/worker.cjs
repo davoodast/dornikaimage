@@ -49,8 +49,10 @@ async function compress() {
   }
 
   const level = compressionLevel && WEBP_QUALITY[compressionLevel] ? compressionLevel : 'balanced';
+  // 'original' = keep same container format but re-encode/optimize
+  const keepOriginal = outputFormat === 'original';
   // 'both' treated same as 'webp' (best compression)
-  const useJpeg = outputFormat === 'jpeg';
+  const useJpeg = !keepOriginal && outputFormat === 'jpeg';
 
   try {
     const originalSize = fs.statSync(resolvedInput).size;
@@ -63,6 +65,40 @@ async function compress() {
       outputFilename = filename;
       outputFilePath = resolvedOutput;
       await sharp(resolvedInput, { animated: true }).gif().toFile(resolvedOutput);
+    } else if (keepOriginal) {
+      // Preserve original format — just optimize/re-encode in-place
+      outputFilename = filename;
+      outputFilePath = resolvedOutput; // same extension as input
+
+      if (format === 'jpeg') {
+        await sharp(resolvedInput)
+          .jpeg({
+            quality: JPEG_QUALITY[level],
+            chromaSubsampling: JPEG_CHROMASUB[level],
+            mozjpeg: true,
+          })
+          .toFile(resolvedOutput);
+      } else if (format === 'png') {
+        await sharp(resolvedInput)
+          .png({ compressionLevel: 9, progressive: true })
+          .toFile(resolvedOutput);
+      } else if (format === 'webp') {
+        await sharp(resolvedInput)
+          .webp({ quality: WEBP_QUALITY[level], effort: WEBP_EFFORT[level], smartSubsample: true })
+          .toFile(resolvedOutput);
+      } else if (format === 'avif') {
+        await sharp(resolvedInput)
+          .avif({ quality: WEBP_QUALITY[level], effort: 4 })
+          .toFile(resolvedOutput);
+      } else {
+        // fallback: WebP conversion for unknown formats
+        const baseName = path.parse(filename).name;
+        outputFilename = baseName + '.webp';
+        outputFilePath = resolvedOutput.replace(/\.[^/.]+$/, '.webp');
+        await sharp(resolvedInput)
+          .webp({ quality: WEBP_QUALITY[level], effort: WEBP_EFFORT[level], smartSubsample: true })
+          .toFile(outputFilePath);
+      }
     } else if (useJpeg) {
       // Convert to JPEG
       const baseName = path.parse(filename).name;

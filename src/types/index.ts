@@ -10,7 +10,7 @@ export interface CompressionJob {
   format: string;
   status: JobStatus;
   compressionLevel?: CompressionLevel;
-  outputFormat?: 'webp' | 'jpeg';
+  outputFormat?: 'webp' | 'jpeg' | 'original';
   originalSize?: number;
   compressedSize?: number;
   error?: string;
@@ -55,7 +55,8 @@ export interface AdminSettings {
   max_file_size_mb: number;
   max_files_per_upload: number;
   logo_path: string;
-  output_format: 'webp' | 'jpeg';
+  output_format: 'webp' | 'jpeg' | 'user_choice';
+  max_ram_mb: number;
   about_us_text: string;
   app_title: string;
   app_subtitle: string;

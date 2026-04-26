@@ -85,6 +85,7 @@ function initDb(db: DatabaseSync): void {
     rate_limit_requests: '100',
     rate_limit_window_ms: '60000',
     rate_limit_message: 'تعداد درخواست‌های شما بیش از حد مجاز است. لطفاً کمی صبر کنید.',
+    max_ram_mb: '512',
   };
   const insert = db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)`);
   for (const [key, value] of Object.entries(defaults)) {
@@ -384,7 +385,7 @@ export function getAllSettings(): AdminSettings {
     max_file_size_mb: Number(map.max_file_size_mb ?? 20),
     max_files_per_upload: Number(map.max_files_per_upload ?? 50),
     logo_path: map.logo_path ?? '/logo.png',
-    output_format: (map.output_format ?? 'webp') as 'webp' | 'jpeg',
+    output_format: (map.output_format ?? 'webp') as 'webp' | 'jpeg' | 'user_choice',
     about_us_text: map.about_us_text ?? 'درنیکا وب — ارائه‌دهنده ابزارهای هوشمند وب',
     app_title: map.app_title ?? 'دستبار تصویر درنیکا وب',
     app_subtitle: map.app_subtitle ?? 'فشرده‌سازی هوشمند تصویر بدون افت کیفیت',
@@ -396,6 +397,7 @@ export function getAllSettings(): AdminSettings {
     rate_limit_requests: Number(map.rate_limit_requests ?? 100),
     rate_limit_window_ms: Number(map.rate_limit_window_ms ?? 60000),
     rate_limit_message: map.rate_limit_message ?? 'تعداد درخواست‌های شما بیش از حد مجاز است. لطفاً کمی صبر کنید.',
+    max_ram_mb: Number(map.max_ram_mb ?? 512),
   };
 }
 

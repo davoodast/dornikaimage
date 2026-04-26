@@ -40,6 +40,7 @@ export async function PATCH(request: NextRequest) {
     'max_files_per_upload',
     'rate_limit_requests',
     'rate_limit_window_ms',
+    'max_ram_mb',
   ] as const;
 
   const stringKeys = [

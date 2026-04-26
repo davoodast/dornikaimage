@@ -20,7 +20,7 @@ interface PublicSettings {
   cleanup_interval_ms: number;
   max_file_size_mb: number;
   max_files_per_upload: number;
-  output_format: 'webp' | 'jpeg';
+  output_format: 'webp' | 'jpeg' | 'user_choice';
 }
 
 const DEFAULT_SETTINGS: PublicSettings = {
@@ -36,6 +36,30 @@ const DEFAULT_SETTINGS: PublicSettings = {
   max_files_per_upload: 50,
   output_format: 'webp',
 };
+
+const FORMAT_CHOICE_OPTIONS: { value: 'webp' | 'original'; label: string; desc: string; icon: React.ReactNode }[] = [
+  {
+    value: 'webp',
+    label: 'تبدیل به WebP',
+    desc: 'فشرده‌ترین فرمت — تا ۸۰٪ کوچکتر',
+    icon: (
+      <svg viewBox="0 0 20 20" fill="none" className="w-5 h-5">
+        <path d="M3 10l7-7 7 7M5 8v7a1 1 0 001 1h8a1 1 0 001-1V8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    value: 'original',
+    label: 'حفظ فرمت اصلی',
+    desc: 'JPG→JPG · PNG→PNG · GIF→GIF',
+    icon: (
+      <svg viewBox="0 0 20 20" fill="none" className="w-5 h-5">
+        <rect x="3" y="4" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M7 8h6M7 12h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+];
 
 interface UploadedJob {
   jobId: string;
@@ -58,6 +82,7 @@ export default function Home() {
   const [phase, setPhase] = useState<AppPhase>('select');
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState('');
+  const [userFormatChoice, setUserFormatChoice] = useState<'webp' | 'original'>('webp');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [jobMap, setJobMap] = useState<Map<string, UploadedJob>>(new Map());
   const [thumbnails, setThumbnails] = useState<Map<string, string>>(new Map());
@@ -110,7 +135,9 @@ export default function Home() {
     const formData = new FormData();
     for (const file of pendingFiles) formData.append('files', file);
     formData.append('compressionLevel', compressionLevel);
-    formData.append('outputFormat', publicSettings.output_format);
+    const formatToSend =
+      publicSettings.output_format === 'user_choice' ? userFormatChoice : publicSettings.output_format;
+    formData.append('outputFormat', formatToSend);
     try {
       setUploadProgress(30);
       const res = await fetch('/api/upload', { method: 'POST', body: formData });
@@ -136,7 +163,7 @@ export default function Home() {
       setPhase('select');
       setUploadProgress(0);
     }
-  }, [pendingFiles, compressionLevel]);
+  }, [pendingFiles, compressionLevel, publicSettings.output_format, userFormatChoice]);
 
   const handleReset = useCallback(() => {
     if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
@@ -290,6 +317,49 @@ export default function Home() {
                       className="space-y-5 overflow-hidden"
                     >
                       <CompressionOptions value={compressionLevel} onChange={setCompressionLevel} />
+
+                      {/* Output format choice — shown only when admin set 'user_choice' */}
+                      {publicSettings.output_format === 'user_choice' && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          <p className="text-xs text-slate-500 mb-2.5 text-center">فرمت خروجی را انتخاب کنید</p>
+                          <div className="grid grid-cols-2 gap-3">
+                            {FORMAT_CHOICE_OPTIONS.map((opt) => {
+                              const active = userFormatChoice === opt.value;
+                              return (
+                                <motion.button
+                                  key={opt.value}
+                                  type="button"
+                                  onClick={() => setUserFormatChoice(opt.value)}
+                                  whileHover={{ scale: 1.02 }}
+                                  whileTap={{ scale: 0.97 }}
+                                  className={`relative flex flex-col items-center gap-1.5 rounded-xl border-2 px-3 py-3 text-center transition-colors select-none
+                                    ${active
+                                      ? 'border-teal-500 bg-teal-950/40 text-teal-300'
+                                      : 'border-slate-700 bg-slate-900/60 text-slate-400 hover:border-slate-500 hover:text-slate-300'
+                                    }`}
+                                >
+                                  <span className={active ? 'text-teal-400' : 'text-slate-500'}>
+                                    {opt.icon}
+                                  </span>
+                                  <span className="text-sm font-semibold">{opt.label}</span>
+                                  <span className="text-[11px] leading-tight opacity-70">{opt.desc}</span>
+                                  {active && (
+                                    <motion.span
+                                      layoutId="format-active-dot"
+                                      className="absolute top-2 right-2 w-2 h-2 rounded-full bg-teal-400"
+                                    />
+                                  )}
+                                </motion.button>
+                              );
+                            })}
+                          </div>
+                        </motion.div>
+                      )}
+
                       <motion.button
                         type="button"
                         onClick={handleStart}
