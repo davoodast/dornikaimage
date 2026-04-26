@@ -123,15 +123,16 @@ dornikaimage/
 │   ├── generate-password-hash.js       # CLI: node scripts/generate-password-hash.js <pw>
 │   ├── generate-icons.js               # CLI: generate PWA icons using Sharp
 │   ├── _write-env.js                   # Helper: writes .env.local with properly escaped bcrypt hash
-│   ├── _rebuild-admin-v2.mjs           # Dev helper: regenerate DashboardCharts.tsx + LogsTable.tsx
-│   ├── portable-run-template.bat       # Template for the generated portable run helper
-│   └── portable-kill-template.bat      # Template for the generated portable stop helper
+│   └── _rebuild-admin-v2.mjs           # Dev helper: regenerate DashboardCharts.tsx + LogsTable.tsx
+├── deploy/
+│   ├── build.ps1                       # PowerShell: full production build → deploy/ folder
+│   ├── start.ps1                       # PowerShell: start server on port 3001
+│   └── kill.ps1                        # PowerShell: stop server on port 3001
 ├── data/                               # Runtime data (gitignored)
 │   ├── logs.db                         # SQLite database (WAL mode)
 │   └── app.log                         # Winston log file (JSON, 10MB×5)
 ├── uploads/                            # Temp uploaded files (gitignored, cleaned by scheduler)
 ├── compressed/                         # Temp compressed output (gitignored, cleaned by scheduler)
-├── make-portable.bat                   # Builds a sibling portable-files package with run/kill helpers
 ├── .env.local                          # Secret env vars (gitignored — never commit)
 ├── .env.local.example                  # Template with all required keys (no real values)
 ├── PROJECT_RULES.md                    # ← این فایل
@@ -153,6 +154,7 @@ dornikaimage/
 | `ADMIN_USERNAME` | string | — | نام کاربری ادمین |
 | `ADMIN_PASSWORD_HASH` | string | — | bcrypt hash رمز ادمین |
 | `JWT_SECRET` | string (≥32 char) | — | کلید امضای JWT |
+| `ADMIN_COOKIE_SECURE` | string (`auto`\|`true`\|`false`) | auto | کنترل secure cookie ادمین؛ در حالت auto بر اساس HTTP/HTTPS تصمیم‌گیری می‌شود |
 | `CLEANUP_INTERVAL_MS` | number | 60000 | زمان پاکسازی فایل‌ها (ms) |
 | `MAX_FILE_SIZE_MB` | number | 20 | حداکثر سایز هر فایل |
 | `MAX_FILES_PER_UPLOAD` | number | 50 | حداکثر تعداد فایل در هر بار |

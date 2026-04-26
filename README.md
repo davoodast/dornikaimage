@@ -158,25 +158,25 @@ npm start
 
 1. اگر `node_modules` نباشد، `npm install` می‌کند
 2. `npm run build` را اجرا می‌کند (بدون نیاز به build قبلی)
-3. پوشه `..\portable-files` را می‌سازد یا بازنویسی می‌کند
+3. پوشه `..\dornikaimage-portable` را می‌سازد یا بازنویسی می‌کند
 
-خروجی داخل پوشه `..\portable-files` شامل:
+خروجی داخل پوشه `..\dornikaimage-portable` شامل:
 
 - سرور standalone (`server.js` + `node_modules`)
 - فایل‌های `public`
 - فایل‌های build شده `.next\static` (CSS و JS)
 - فایل `.env.local`
 - پوشه‌های `data`, `uploads`, `compressed`, `logs`
-- `run-portable.bat` و `kill-portable.bat`
+- `start.bat` و `stop.bat`
 
 روی سیستم مقصد (فقط Node.js 20+ لازم است، بدون نیاز به npm install):
 
 ```powershell
 # راه‌اندازی سرور روی پورت 3001
-run-portable.bat
+start.bat
 
 # توقف سرور
-kill-portable.bat
+stop.bat
 ```
 
 ---
@@ -188,6 +188,7 @@ kill-portable.bat
 | `ADMIN_USERNAME` | — | نام کاربری ادمین (اجباری) |
 | `ADMIN_PASSWORD_HASH` | — | هش bcrypt رمز عبور (cost 12) (اجباری) |
 | `JWT_SECRET` | — | کلید امضای JWT، حداقل ۳۲ کاراکتر (اجباری) |
+| `ADMIN_COOKIE_SECURE` | `auto` | کنترل امن‌بودن کوکی ادمین: `true` همیشه secure، `false` همیشه غیر-secure، در حالت پیش‌فرض بر اساس HTTP/HTTPS خودکار |
 | `CLEANUP_INTERVAL_MS` | `3600000` | فاصله زمانی پاک‌سازی فایل‌های موقت (ms) |
 | `MAX_FILE_SIZE_MB` | `20` | حداکثر حجم هر فایل آپلودی |
 | `MAX_FILES_PER_UPLOAD` | `50` | حداکثر تعداد فایل در هر آپلود |

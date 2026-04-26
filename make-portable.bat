@@ -1,153 +1,231 @@
 @echo off
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 chcp 65001 >nul 2>&1
+
+:: DornikaImage -- Portable Builder v2
+:: Self-contained: no external file dependencies
+:: Output folder created next to project folder
 
 set "ROOT=%~dp0"
 if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
-set "OUTDIR=%ROOT%\..\portable-files"
+set "OUTDIR_REL=%ROOT%\..\dornikaimage-portable"
 
 echo.
 echo ==========================================
-echo   DornikaImage Portable Builder
+echo   DornikaImage Portable Builder v2
 echo ==========================================
 echo   Project : %ROOT%
-echo   Output  : %OUTDIR%
 echo.
 
-:: --- پیش‌نیازها ---
-
+:: ---- [0] Check Node.js ----
 where node >nul 2>&1
 if errorlevel 1 (
-    echo [!] Node.js پيدا نشد. اول Node.js 20 يا بالاتر را نصب کن.
-    pause
-    exit /b 1
+    echo [ERROR] Node.js not found. Install Node.js 20 LTS first.
+    pause & exit /b 1
 )
 
+:: ---- [0] Check npm ----
 where npm >nul 2>&1
 if errorlevel 1 (
-    echo [!] npm پيدا نشد.
-    pause
-    exit /b 1
+    echo [ERROR] npm not found.
+    pause & exit /b 1
 )
 
+:: ---- [0] Check .env.local ----
 if not exist "%ROOT%\.env.local" (
-    echo [!] فایل .env.local پيدا نشد.
-    echo     قبل از ساخت نسخه portable، env پروژه را کامل کن.
-    pause
-    exit /b 1
+    echo [ERROR] .env.local not found. Create it before building portable package.
+    pause & exit /b 1
 )
 
+:: ---- [1/6] npm install ----
 if not exist "%ROOT%\node_modules" (
-    echo [0/5] Installing dependencies...
+    echo [1/6] Installing npm dependencies...
     cd /d "%ROOT%"
-    npm install
-    if errorlevel 1 (
-        echo [!] npm install ناموفق بود.
-        pause
-        exit /b 1
-    )
+    call npm install
+    if errorlevel 1 ( echo [ERROR] npm install failed. & pause & exit /b 1 )
+) else (
+    echo [1/6] node_modules OK, skipping install.
 )
 
-echo [1/5] Building project ^(npm run build^)...
+:: ---- [2/6] Build ----
+echo [2/6] Building project (npm run build)...
 cd /d "%ROOT%"
-npm run build
+call npm run build
 if errorlevel 1 (
-    echo [!] npm run build ناموفق بود. خطاها را بررسی کن.
-    pause
-    exit /b 1
+    echo [ERROR] npm run build failed.
+    pause & exit /b 1
 )
 
 if not exist "%ROOT%\.next\standalone\server.js" (
-    echo [!] بعد از build، فایل .next\standalone\server.js پيدا نشد.
-    echo     مطمئن شو که output: 'standalone' در next.config.js تنظيم است.
-    pause
-    exit /b 1
+    echo [ERROR] .next\standalone\server.js not found after build.
+    echo         Make sure output:'standalone' is set in next.config.js
+    pause & exit /b 1
 )
 
-echo [2/5] Recreating portable folder...
-if exist "%OUTDIR%" (
-    echo       حذف پوشه قبلی...
-    rmdir /s /q "%OUTDIR%"
+:: ---- [3/6] Create output dir + resolve absolute path ----
+echo [3/6] Preparing output directory...
+if exist "%OUTDIR_REL%" (
+    echo       Removing previous build...
+    rmdir /s /q "%OUTDIR_REL%"
+    if errorlevel 1 ( echo [ERROR] Cannot remove old folder. Is it in use? & pause & exit /b 1 )
 )
-mkdir "%OUTDIR%"
-if errorlevel 1 (
-    echo [!] نتوانست پوشه portable-files را بسازد: %OUTDIR%
-    pause
-    exit /b 1
-)
-echo       ساخته شد: %OUTDIR%
+mkdir "%OUTDIR_REL%"
+if errorlevel 1 ( echo [ERROR] Cannot create output dir. & pause & exit /b 1 )
 
-echo [3/5] Copying standalone server...
-xcopy "%ROOT%\.next\standalone\*" "%OUTDIR%\" /E /I /Y
-if errorlevel 1 (
-    echo [!] کپی standalone ناموفق بود.
-    pause
-    exit /b 1
-)
+:: Resolve .. to get true absolute path (needed for copy and > redirect)
+pushd "%OUTDIR_REL%"
+set "OUTDIR=%CD%"
+popd
+echo       Created: %OUTDIR%
 
-echo       Copying .next/static...
+:: ---- [4/6] Copy files ----
+echo [4/6] Copying files...
+
+echo       [4a] standalone server + bundled node_modules...
+xcopy "%ROOT%\.next\standalone\*" "%OUTDIR%\" /E /I /Y /Q
+if errorlevel 1 ( echo [ERROR] xcopy standalone failed. & pause & exit /b 1 )
+
+echo       [4b] .next\static (CSS, JS chunks, fonts, images)...
 if exist "%ROOT%\.next\static" (
-    xcopy "%ROOT%\.next\static\*" "%OUTDIR%\.next\static\" /E /I /Y
+    xcopy "%ROOT%\.next\static\*" "%OUTDIR%\.next\static\" /E /I /Y /Q
 )
 
-echo       Copying public...
+echo       [4c] public (icons, fonts, manifest, sw.js, logo)...
 if exist "%ROOT%\public" (
-    xcopy "%ROOT%\public\*" "%OUTDIR%\public\" /E /I /Y
+    xcopy "%ROOT%\public\*" "%OUTDIR%\public\" /E /I /Y /Q
 )
 
-echo       Copying .env.local...
-copy /Y "%ROOT%\.env.local" "%OUTDIR%\.env.local"
+echo       [4d] worker.cjs (compression worker thread)...
+if not exist "%OUTDIR%\src\lib\compression" mkdir "%OUTDIR%\src\lib\compression"
+if exist "%ROOT%\src\lib\compression\worker.cjs" (
+    copy /Y "%ROOT%\src\lib\compression\worker.cjs" "%OUTDIR%\src\lib\compression\worker.cjs" >nul
+    echo         OK: worker.cjs copied.
+) else (
+    echo [WARN] worker.cjs not found - compression will not work!
+)
 
-echo       Copying data...
+echo       [4e] .env.local...
+copy /Y "%ROOT%\.env.local" "%OUTDIR%\.env.local" >nul
+if errorlevel 1 ( echo [WARN] .env.local copy failed. )
+
+echo       [4f] data (SQLite DB)...
 if exist "%ROOT%\data" (
-    xcopy "%ROOT%\data\*" "%OUTDIR%\data\" /E /I /Y
+    xcopy "%ROOT%\data\*" "%OUTDIR%\data\" /E /I /Y /Q
 ) else (
     mkdir "%OUTDIR%\data"
 )
 
-echo       Creating uploads/compressed/logs folders...
+echo       [4g] runtime dirs (uploads, compressed, logs)...
 if not exist "%OUTDIR%\uploads"    mkdir "%OUTDIR%\uploads"
 if not exist "%OUTDIR%\compressed" mkdir "%OUTDIR%\compressed"
 if not exist "%OUTDIR%\logs"       mkdir "%OUTDIR%\logs"
 
-echo [4/5] Writing portable run/kill helpers...
-copy /Y "%ROOT%\scripts\portable-run-template.bat" "%OUTDIR%\run-portable.bat"
-if errorlevel 1 (
-    echo [!] ساخت run-portable.bat ناموفق بود.
-    pause
-    exit /b 1
+:: ---- [5/6] Write start.bat ----
+echo [5/6] Writing start.bat and stop.bat...
+
+> "%OUTDIR%\start.bat" (
+    echo @echo off
+    echo setlocal EnableExtensions
+    echo chcp 65001 ^>nul 2^>^&1
+    echo.
+    echo set "APPDIR=%%~dp0"
+    echo if "%%APPDIR:~-1%%"=="\" set "APPDIR=%%APPDIR:~0,-1%%"
+    echo set PORT=3001
+    echo set "LOGFILE=%%APPDIR%%\logs\runtime.log"
+    echo.
+    echo where node ^>nul 2^>^&1
+    echo if errorlevel 1 ^(
+    echo     echo [ERROR] Node.js not found. Install Node.js 20 LTS.
+    echo     pause ^& exit /b 1
+    echo ^)
+    echo.
+    echo if not exist "%%APPDIR%%\.env.local" ^(
+    echo     echo [ERROR] .env.local not found next to this folder.
+    echo     pause ^& exit /b 1
+    echo ^)
+    echo.
+    echo echo ==========================================
+    echo echo   DornikaImage Portable Server
+    echo echo ==========================================
+    echo echo   URL  : http://localhost:%%PORT%%
+    echo echo   Log  : %%LOGFILE%%
+    echo echo   Stop : stop.bat
+    echo echo.
+    echo.
+    echo cd /d "%%APPDIR%%"
+    echo set NODE_ENV=production
+    echo set HOSTNAME=0.0.0.0
+    echo.
+    echo node server.js ^>^> "%%LOGFILE%%" 2^>^&1
+    echo if errorlevel 1 ^(
+    echo     echo [ERROR] Server stopped with error. Check: %%LOGFILE%%
+    echo     pause
+    echo ^)
+    echo endlocal
 )
 
-copy /Y "%ROOT%\scripts\portable-kill-template.bat" "%OUTDIR%\kill-portable.bat"
-if errorlevel 1 (
-    echo [!] ساخت kill-portable.bat ناموفق بود.
-    pause
-    exit /b 1
+> "%OUTDIR%\stop.bat" (
+    echo @echo off
+    echo setlocal EnableExtensions
+    echo chcp 65001 ^>nul 2^>^&1
+    echo.
+    echo set "PORT=3001"
+    echo set "FOUND=0"
+    echo.
+    echo for /f "tokens=*" %%%%a in ^('powershell -NoProfile -Command "^(Get-NetTCPConnection -LocalPort %%PORT%% -State Listen -ErrorAction SilentlyContinue ^| Select-Object -ExpandProperty OwningProcess^)"'^) do ^(
+    echo     set "FOUND=1"
+    echo     echo Stopping PID %%%%a on port %%PORT%%...
+    echo     taskkill /f /pid %%%%a ^>nul 2^>^&1
+    echo ^)
+    echo.
+    echo if "%%FOUND%%"=="0" ^(
+    echo     echo [i] No process found on port %%PORT%%
+    echo     exit /b 0
+    echo ^)
+    echo echo [ok] Server stopped.
+    echo endlocal
 )
 
-(
-    echo DornikaImage Portable Package
-    echo ============================
+:: ---- [6/6] README ----
+echo [6/6] Writing README-portable.txt...
+> "%OUTDIR%\README-portable.txt" (
+    echo DornikaImage -- Portable Package
+    echo =================================
     echo.
-    echo 1. روی سیستم مقصد Node.js 20 یا بالاتر نصب باشد.
-    echo 2. پوشه portable-files را کامل کپی کن.
-    echo 3. برای اجرا run-portable.bat را باز کن.
-    echo 4. برای توقف kill-portable.bat را اجرا کن.
-    echo 5. پروژه روی http://localhost:3001 بالا می‌آید.
+    echo Requirements: Node.js 20 LTS (https://nodejs.org)
     echo.
-    echo محتویات این پوشه شامل server standalone، فایل‌های public، CSS/JSهای build شده، env، data، uploads و compressed است.
-) > "%OUTDIR%\README-portable.txt"
+    echo Getting started:
+    echo   1. Copy this entire folder to the target machine.
+    echo   2. Run start.bat
+    echo   3. Open http://localhost:3001 in browser.
+    echo   4. To stop the server: run stop.bat
+    echo.
+    echo Folder contents:
+    echo   server.js                       Next.js standalone server
+    echo   .next\static\                   CSS, JS chunks, fonts (build output)
+    echo   public\                         Icons, fonts, manifest, service worker
+    echo   src\lib\compression\worker.cjs  Compression worker thread
+    echo   .env.local                      Environment config (editable)
+    echo   data\                           SQLite database
+    echo   uploads\                        Temp uploaded files
+    echo   compressed\                     Compressed output files
+    echo   logs\                           Runtime logs
+    echo   start.bat                       Start server (port 3001)
+    echo   stop.bat                        Stop server
+)
 
-echo [5/5] Portable package is ready.
+:: ---- Done ----
 echo.
-echo مسیر خروجی:
-echo %OUTDIR%
+echo ==========================================
+echo   Portable package ready!
+echo ==========================================
+echo   Output : %OUTDIR%
 echo.
-echo برای اجرا روی سیستم دیگر:
-echo   1. کل پوشه portable-files را کپی کن
-echo   2. Node.js 20+ نصب کن
-echo   3. run-portable.bat را اجرا کن
-echo   4. برای توقف kill-portable.bat را بزن
+echo   On target machine:
+echo     1. Copy the dornikaimage-portable folder
+echo     2. Install Node.js 20 LTS
+echo     3. Run start.bat
+echo     4. Open http://localhost:3001
 echo.
 pause
 endlocal

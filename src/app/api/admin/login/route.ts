@@ -6,6 +6,17 @@ import { loginRateLimiter } from '@/lib/security/rateLimit';
 import { logAdminLogin } from '@/lib/logger/winston';
 import { hashValue, getSetting } from '@/lib/db/client';
 
+function resolveSecureCookie(request: NextRequest): boolean {
+  const override = process.env.ADMIN_COOKIE_SECURE;
+  if (override === 'true') return true;
+  if (override === 'false') return false;
+
+  // In portable/LAN deployments, login is often served over HTTP.
+  // Secure cookies are only accepted on HTTPS, so auto-enable only when HTTPS is detected.
+  const forwardedProto = request.headers.get('x-forwarded-proto')?.toLowerCase();
+  return request.nextUrl.protocol === 'https:' || forwardedProto === 'https';
+}
+
 export async function POST(request: NextRequest) {
   const ip =
     request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown';
@@ -60,7 +71,7 @@ export async function POST(request: NextRequest) {
   const response = NextResponse.json({ success: true });
   response.cookies.set('admin_token', token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: resolveSecureCookie(request),
     sameSite: 'strict',
     maxAge: 60 * 60 * 8, // 8 hours — matches JWT expiry
     path: '/',
