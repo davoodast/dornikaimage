@@ -137,17 +137,14 @@ npm start
 # http://localhost:3000
 ```
 
-### حالت production (پورت ۳۰۰۱ — پیشنهادی)
+### حالت production
 
 ```powershell
 # Build یک‌بار
-.\deploy\build.ps1
+npm run build
 
-# اجرا روی پورت ۳۰۰۱
-.\deploy\start.ps1
-
-# توقف
-.\deploy\kill.ps1
+# اجرا
+npm start
 ```
 
 ---

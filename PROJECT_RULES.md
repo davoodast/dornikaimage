@@ -124,10 +124,6 @@ dornikaimage/
 │   ├── generate-icons.js               # CLI: generate PWA icons using Sharp
 │   ├── _write-env.js                   # Helper: writes .env.local with properly escaped bcrypt hash
 │   └── _rebuild-admin-v2.mjs           # Dev helper: regenerate DashboardCharts.tsx + LogsTable.tsx
-├── deploy/
-│   ├── build.ps1                       # PowerShell: full production build → deploy/ folder
-│   ├── start.ps1                       # PowerShell: start server on port 3001
-│   └── kill.ps1                        # PowerShell: stop server on port 3001
 ├── data/                               # Runtime data (gitignored)
 │   ├── logs.db                         # SQLite database (WAL mode)
 │   └── app.log                         # Winston log file (JSON, 10MB×5)
