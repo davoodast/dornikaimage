@@ -123,12 +123,15 @@ dornikaimage/
 │   ├── generate-password-hash.js       # CLI: node scripts/generate-password-hash.js <pw>
 │   ├── generate-icons.js               # CLI: generate PWA icons using Sharp
 │   ├── _write-env.js                   # Helper: writes .env.local with properly escaped bcrypt hash
-│   └── _rebuild-admin-v2.mjs           # Dev helper: regenerate DashboardCharts.tsx + LogsTable.tsx
+│   ├── _rebuild-admin-v2.mjs           # Dev helper: regenerate DashboardCharts.tsx + LogsTable.tsx
+│   ├── portable-run-template.bat       # Template for the generated portable run helper
+│   └── portable-kill-template.bat      # Template for the generated portable stop helper
 ├── data/                               # Runtime data (gitignored)
 │   ├── logs.db                         # SQLite database (WAL mode)
 │   └── app.log                         # Winston log file (JSON, 10MB×5)
 ├── uploads/                            # Temp uploaded files (gitignored, cleaned by scheduler)
 ├── compressed/                         # Temp compressed output (gitignored, cleaned by scheduler)
+├── make-portable.bat                   # Builds a sibling portable-files package with run/kill helpers
 ├── .env.local                          # Secret env vars (gitignored — never commit)
 ├── .env.local.example                  # Template with all required keys (no real values)
 ├── PROJECT_RULES.md                    # ← این فایل

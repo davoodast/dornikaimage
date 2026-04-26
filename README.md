@@ -147,6 +147,38 @@ npm run build
 npm start
 ```
 
+### نسخه portable برای سیستم دیگر
+
+```powershell
+# داخل پوشه پروژه — فقط همین یک دستور کافی است
+.\make-portable.bat
+```
+
+این دستور به‌صورت خودکار:
+
+1. اگر `node_modules` نباشد، `npm install` می‌کند
+2. `npm run build` را اجرا می‌کند (بدون نیاز به build قبلی)
+3. پوشه `..\portable-files` را می‌سازد یا بازنویسی می‌کند
+
+خروجی داخل پوشه `..\portable-files` شامل:
+
+- سرور standalone (`server.js` + `node_modules`)
+- فایل‌های `public`
+- فایل‌های build شده `.next\static` (CSS و JS)
+- فایل `.env.local`
+- پوشه‌های `data`, `uploads`, `compressed`, `logs`
+- `run-portable.bat` و `kill-portable.bat`
+
+روی سیستم مقصد (فقط Node.js 20+ لازم است، بدون نیاز به npm install):
+
+```powershell
+# راه‌اندازی سرور روی پورت 3001
+run-portable.bat
+
+# توقف سرور
+kill-portable.bat
+```
+
 ---
 
 ## متغیرهای محیطی
