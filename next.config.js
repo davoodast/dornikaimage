@@ -8,10 +8,12 @@ const withPWA = require('next-pwa')({
     {
       urlPattern: /^\/api\/.*/i,
       handler: 'NetworkOnly',
+      options: {},
     },
     {
       urlPattern: /^\/admin\/.*/i,
       handler: 'NetworkOnly',
+      options: {},
     },
     {
       urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/i,

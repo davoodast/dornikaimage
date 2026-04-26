@@ -53,7 +53,7 @@ dornikaimage/
 │   ├── instrumentation.ts              # Next.js startup hook (cleanup scheduler init)
 │   ├── middleware.ts                   # Edge middleware: security headers, rate limiting, path traversal block
 │   ├── app/
-│   │   ├── page.tsx                    # Landing page (main UI)
+│   │   ├── page.tsx                    # Landing page — server component, reads settings from DB, renders HomeClient
 │   │   ├── layout.tsx                  # Root layout with meta/PWA tags + InstallBanner
 │   │   ├── globals.css                 # Global styles + Tailwind directives + @font-face
 │   │   ├── offline/page.tsx            # PWA offline fallback
@@ -61,30 +61,33 @@ dornikaimage/
 │   │   │   ├── login/page.tsx          # Admin login form (client component)
 │   │   │   └── dashboard/page.tsx      # Admin dashboard (server component, JWT-gated)
 │   │   └── api/
-│   │       ├── upload/route.ts         # POST: receive + validate + enqueue files
+│   │       ├── upload/route.ts         # POST: receive + validate + RAM check + enqueue files
 │   │       ├── progress/route.ts       # GET SSE: stream job status per sessionId
-│   │       ├── download/route.ts       # GET: serve single compressed file
-│   │       ├── download/batch/route.ts # GET: serve ZIP of all session files (archiver)
-│   │       └── admin/
-│   │           ├── login/route.ts      # POST: bcrypt verify, sign JWT, set httpOnly cookie
-│   │           ├── logout/route.ts     # POST: clear admin_token cookie
-│   │           ├── logs/route.ts       # GET: paginated logs from SQLite (JWT-gated)
-│   │           ├── settings/route.ts   # GET+PATCH: admin settings (JWT-gated)
-│           ├── change-password/route.ts # POST: change admin password (JWT-gated)
-│           ├── stats/route.ts      # GET: chart stats (JWT-gated)
-│           ├── disk-usage/route.ts # GET: uploads+compressed disk usage (JWT-gated)
-│           └── logo/route.ts       # POST: upload new logo (magic bytes validated)
-│       └── public/
-│           └── settings/route.ts   # GET: public content settings (no auth)
+│   │       ├── download/route.ts       # GET: serve single compressed file (disk fallback)
+│   │       ├── download/batch/route.ts # GET: serve ZIP of all session files (archiver + disk fallback)
+│   │       ├── admin/
+│   │       │   ├── login/route.ts          # POST: bcrypt verify, sign JWT, set httpOnly cookie
+│   │       │   ├── logout/route.ts         # POST: clear admin_token cookie
+│   │       │   ├── logs/route.ts           # GET: paginated logs from SQLite (JWT-gated)
+│   │       │   ├── settings/route.ts       # GET+PATCH: admin settings (JWT-gated)
+│   │       │   ├── change-password/route.ts # POST: change admin password (JWT-gated)
+│   │       │   ├── stats/route.ts          # GET: chart stats for dashboard (JWT-gated)
+│   │       │   ├── disk-usage/route.ts     # GET: uploads+compressed disk usage (JWT-gated)
+│   │       │   └── logo/route.ts           # POST: upload new logo (magic bytes validated)
+│   │       └── public/
+│   │           └── settings/route.ts   # GET: public content settings (no auth)
 │   ├── components/
 │   │   ├── upload/
+│   │   │   ├── HomeClient.tsx          # Main upload UI (client component — receives settings as props from page.tsx)
 │   │   │   ├── DropZone.tsx            # Drag-and-drop area (react-dropzone + framer-motion)
 │   │   │   ├── ImageGrid.tsx           # Uploaded images preview grid (staggered animation)
 │   │   │   ├── ProgressCard.tsx        # Per-file status card (queued/processing/done/error)
+│   │   │   ├── CompressionOptions.tsx  # Compression level selector (balanced/high_quality/high_compression)
 │   │   │   ├── CompressionAnimation.tsx # 5×5 mosaic tile scatter animation (framer-motion)
 │   │   │   └── DownloadButton.tsx      # In-page download with ReadableStream progress
 │   │   ├── admin/
-│   │   │   ├── DashboardCharts.tsx     # recharts BarChart + PieChart (device/browser breakdown)
+│   │   │   ├── DashboardContent.tsx    # Client wrapper: refresh button + clock + signal pass-through
+│   │   │   ├── DashboardCharts.tsx     # recharts AreaChart + PieChart (device/browser/disk breakdown)
 │   │   │   ├── LogsTable.tsx           # Paginated logs viewer + filter bar + CSV export + stats bar
 │   │   │   ├── SettingsForm.tsx        # Settings form with slider + logo upload + toast
 │   │   │   └── LogoutButton.tsx        # Client-side logout button (clears cookie)
@@ -92,23 +95,23 @@ dornikaimage/
 │   │       └── InstallBanner.tsx       # "Add to Home Screen" prompt (30s delay, 7d dismiss)
 │   ├── lib/
 │   │   ├── compression/
-│   │   │   ├── worker.ts               # Worker Thread: Sharp processing (strips EXIF)
-│   │   │   ├── worker.cjs              # Compiled CJS worker (used at runtime)
-│   │   │   └── queue.ts                # Worker Thread Pool (os.cpus().length) + job queue
+│   │   │   ├── worker.ts               # Worker Thread source (TypeScript)
+│   │   │   ├── worker.cjs              # Compiled CJS worker (used at runtime by queue.ts)
+│   │   │   └── queue.ts                # Worker Thread Pool (os.cpus().length) + FIFO queue + RAM reservation
 │   │   ├── db/
-│   │   │   └── client.ts               # SQLite singleton (node:sqlite) + typed queries
+│   │   │   └── client.ts               # SQLite singleton (node:sqlite) + typed queries + settings cache
 │   │   ├── auth/
 │   │   │   └── jwt.ts                  # signToken / verifyToken (jose, HS256, 8h)
 │   │   ├── security/
-│   │   │   ├── rateLimit.ts            # Sliding window rate limiter (api/admin/login instances)
+│   │   │   ├── rateLimit.ts            # Sliding window rate limiter (upload / admin / login instances)
 │   │   │   ├── validate.ts             # Zod schemas (upload, login, settings, uuid)
-│   │   │   └── fileValidator.ts        # Magic bytes validation + filename sanitizer
+│   │   │   └── fileValidator.ts        # Magic bytes validation + filename sanitizer + path containment
 │   │   ├── logger/
-│   │   │   └── winston.ts              # Winston logger (file + console in dev)
+│   │   │   └── winston.ts              # Winston logger (file + console in dev, JSON, 10MB×5 rotation)
 │   │   ├── cleanup/
-│   │   │   └── scheduler.ts            # node-cron cleanup (every 30s)
+│   │   │   └── scheduler.ts            # node-cron cleanup (configurable interval, default 1h)
 │   │   └── hooks/
-│   │       └── useProgress.ts          # React hook: SSE client for job progress
+│   │       └── useProgress.ts          # React hook: SSE client for real-time job progress
 │   └── types/
 │       └── index.ts                    # Shared TypeScript interfaces
 ├── public/
@@ -121,6 +124,10 @@ dornikaimage/
 │   ├── generate-icons.js               # CLI: generate PWA icons using Sharp
 │   ├── _write-env.js                   # Helper: writes .env.local with properly escaped bcrypt hash
 │   └── _rebuild-admin-v2.mjs           # Dev helper: regenerate DashboardCharts.tsx + LogsTable.tsx
+├── deploy/
+│   ├── build.ps1                       # PowerShell: full production build → deploy/ folder
+│   ├── start.ps1                       # PowerShell: start server on port 3001
+│   └── kill.ps1                        # PowerShell: stop server on port 3001
 ├── data/                               # Runtime data (gitignored)
 │   ├── logs.db                         # SQLite database (WAL mode)
 │   └── app.log                         # Winston log file (JSON, 10MB×5)
